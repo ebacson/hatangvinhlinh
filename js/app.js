@@ -38,7 +38,14 @@ const state = {
   selectedKey: null,
   tick: Date.now(),
   stationsBound: false,
+  runHistory: [],
+  runHistoryLoading: false,
+  runHistoryKey: null,
 };
+
+let unsubRunHistory = null;
+let cachedRunEvents = {};
+const RUN_HISTORY_LIMIT = 40;
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -400,12 +407,135 @@ function renderAlerts() {
     .join('');
 }
 
+function parseDurationToken(token) {
+  if (!token || typeof token !== 'string') return null;
+  const m = token.trim().match(/^(\d+)\s*p$/i);
+  return m ? Number(m[1]) : null;
+}
+
+function runDurationMinutes(ev) {
+  const effective = toNum(ev.durationMinutesEffective);
+  if (effective != null && effective >= 0) return effective;
+  const fromRange = toNum(ev.durationMinutesFromRange);
+  if (fromRange != null && fromRange >= 0) return fromRange;
+  return parseDurationToken(ev.durationToken);
+}
+
+function buildRunHistory(eventsMap, station) {
+  const rows = [];
+  const events = Object.entries(eventsMap || {}).map(([id, ev]) => ({ id, ...(ev || {}) }));
+
+  for (const ev of events) {
+    const device = String(ev.deviceType || '');
+    if (!device.toUpperCase().includes('MAY_NO')) continue;
+    if (String(ev.type || '').toUpperCase() !== 'KP') continue;
+    const minutes = runDurationMinutes(ev);
+    const start = ev.kpStartTime || '--';
+    const end = ev.kpEndTime || '--';
+    const sortAt = toNum(ev.receivedAt) || 0;
+    rows.push({
+      id: ev.id,
+      active: false,
+      start,
+      end,
+      minutes,
+      sortAt,
+      label: 'Đã chạy',
+    });
+  }
+
+  if (station?.mayNoLastAlertType === 'SC' && station.mayNoScAtMillis > 0) {
+    const status = station.deviceStatus?.MAY_NO_EAS || {};
+    const start = status.scEventTime || formatMillis(station.mayNoScAtMillis);
+    const activeMin = Math.max(0, Math.floor((Date.now() - station.mayNoScAtMillis) / 60_000));
+    rows.push({
+      id: 'active-sc',
+      active: true,
+      start,
+      end: 'đang chạy',
+      minutes: activeMin,
+      sortAt: station.mayNoScAtMillis,
+      label: 'Đang chạy',
+    });
+  }
+
+  rows.sort((a, b) => b.sortAt - a.sortAt);
+  return rows.slice(0, RUN_HISTORY_LIMIT);
+}
+
+function renderRunHistory() {
+  const el = $('#detail-run-history');
+  if (!el) return;
+  if (state.runHistoryLoading && state.runHistory.length === 0) {
+    el.innerHTML = `<p class="muted run-history-empty">Đang tải...</p>`;
+    return;
+  }
+  if (!state.runHistory.length) {
+    el.innerHTML = `<p class="muted run-history-empty">Chưa có lần chạy nào được ghi.</p>`;
+    return;
+  }
+  el.innerHTML = state.runHistory
+    .map((r) => {
+      const dur =
+        r.minutes == null ? '--' : r.active ? `~${formatMinutes(r.minutes)}` : formatMinutes(r.minutes);
+      const range = `${escapeHtml(r.start)} → ${escapeHtml(r.end)}`;
+      return `<article class="run-row ${r.active ? 'is-active' : ''}">
+        <div class="run-row-top">
+          <div class="run-row-range">${range}</div>
+          <div class="run-row-dur">${escapeHtml(dur)}</div>
+        </div>
+        <div class="run-row-meta">${escapeHtml(r.label)}</div>
+      </article>`;
+    })
+    .join('');
+}
+
+function stopRunHistoryListener() {
+  if (unsubRunHistory) {
+    unsubRunHistory();
+    unsubRunHistory = null;
+  }
+  cachedRunEvents = {};
+  state.runHistory = [];
+  state.runHistoryKey = null;
+  state.runHistoryLoading = false;
+}
+
+function refreshRunHistoryFromCache(station) {
+  if (!station || state.runHistoryKey !== station.stationKey) return;
+  state.runHistory = buildRunHistory(cachedRunEvents, station);
+  renderRunHistory();
+}
+
+function bindRunHistory(stationKey) {
+  if (!stationKey) {
+    stopRunHistoryListener();
+    renderRunHistory();
+    return;
+  }
+  if (state.runHistoryKey === stationKey && unsubRunHistory) {
+    refreshRunHistoryFromCache(state.stations.find((x) => x.stationKey === stationKey));
+    return;
+  }
+  stopRunHistoryListener();
+  state.runHistoryKey = stationKey;
+  state.runHistoryLoading = true;
+  renderRunHistory();
+
+  unsubRunHistory = onValue(ref(db, `stations/${stationKey}/events`), (snap) => {
+    cachedRunEvents = snap.val() || {};
+    state.runHistoryLoading = false;
+    refreshRunHistoryFromCache(state.stations.find((x) => x.stationKey === stationKey));
+  });
+}
+
 function renderDetail() {
   const sheet = $('#detail-sheet');
   const backdrop = $('#sheet-backdrop');
   if (!state.selectedKey) {
     sheet.hidden = true;
     backdrop.hidden = true;
+    stopRunHistoryListener();
     return;
   }
   const s = state.stations.find((x) => x.stationKey === state.selectedKey);
@@ -413,6 +543,7 @@ function renderDetail() {
     state.selectedKey = null;
     sheet.hidden = true;
     backdrop.hidden = true;
+    stopRunHistoryListener();
     return;
   }
   sheet.hidden = false;
@@ -432,6 +563,9 @@ function renderDetail() {
     sheet.dataset.initialLevel = String($('#f-level').value);
     sheet.dataset.key = s.stationKey;
     sheet.dataset.bound = '1';
+    bindRunHistory(s.stationKey);
+  } else {
+    refreshRunHistoryFromCache(s);
   }
   const predicted = stationForecast(s);
   $('#detail-forecast').textContent =
@@ -643,6 +777,7 @@ function bindEvents() {
 
 function closeDetail() {
   state.selectedKey = null;
+  stopRunHistoryListener();
   render();
 }
 
