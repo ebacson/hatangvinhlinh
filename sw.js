@@ -1,4 +1,4 @@
-const CACHE = 'htvl-v8';
+const CACHE = 'htvl-v9';
 const BASE = '/hatangvinhlinh';
 const ASSETS = [
   `${BASE}/`,
