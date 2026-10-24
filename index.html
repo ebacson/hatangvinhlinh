@@ -18,7 +18,7 @@
       href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700&family=Sora:wght@600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="css/app.css?v=20" />
+    <link rel="stylesheet" href="css/app.css?v=21" />
   </head>
   <body>
     <!-- Auth -->
@@ -153,20 +153,22 @@
 
         <section class="panel" data-panel="stats" hidden>
           <div class="stats-toolbar">
-            <label class="stats-field">
-              <span>Kỳ</span>
-              <select id="stats-period-type">
-                <option value="month">Theo tháng</option>
-                <option value="quarter">Theo quý</option>
-                <option value="year">Theo năm</option>
-                <option value="all">Tất cả</option>
-              </select>
-            </label>
-            <label class="stats-field" id="stats-period-wrap">
-              <span>Chọn kỳ</span>
-              <select id="stats-period-key"></select>
-            </label>
-            <label class="stats-field">
+            <div class="stats-period-row">
+              <label class="stats-field stats-field-type">
+                <span>Kỳ</span>
+                <select id="stats-period-type">
+                  <option value="month">Tháng</option>
+                  <option value="quarter">Quý</option>
+                  <option value="year">Năm</option>
+                  <option value="all">Tất cả</option>
+                </select>
+              </label>
+              <label class="stats-field stats-field-key" id="stats-period-wrap">
+                <span>Chọn kỳ</span>
+                <select id="stats-period-key"></select>
+              </label>
+            </div>
+            <label class="stats-field stats-field-station">
               <span>Trạm</span>
               <select id="stats-station">
                 <option value="">Tất cả trạm</option>
@@ -295,6 +297,6 @@
       <button type="button" id="update-reload" class="btn update-banner-btn">Cập nhật ngay</button>
     </div>
 
-    <script type="module" src="js/app.js?v=20"></script>
+    <script type="module" src="js/app.js?v=21"></script>
   </body>
 </html>

@@ -13,7 +13,7 @@ import {
   set,
   serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-database.js';
-import { BASE, APP_VERSION, firebaseConfig, ALERT_TABS, LONG_RUN_MS, LOW_FUEL_PERCENT } from './config.js?v=20';
+import { BASE, APP_VERSION, firebaseConfig, ALERT_TABS, LONG_RUN_MS, LOW_FUEL_PERCENT } from './config.js?v=21';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -21,14 +21,14 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=20';
+} from './forecast.js?v=21';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=20';
+} from './stats.js?v=21';
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);

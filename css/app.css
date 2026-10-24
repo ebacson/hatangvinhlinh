@@ -1384,34 +1384,62 @@ main {
 
 /* ---------- Stats ---------- */
 .stats-toolbar {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
   margin-bottom: 12px;
+}
+
+.stats-period-row {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  min-width: 0;
 }
 
 .stats-field {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 700;
   color: #6d8298;
   letter-spacing: 0.03em;
   text-transform: uppercase;
+  min-width: 0;
+}
+
+.stats-field-type {
+  flex: 0 0 auto;
+  width: 5.6rem;
+}
+
+.stats-field-key {
+  flex: 1 1 auto;
+}
+
+.stats-field-station {
+  width: 100%;
 }
 
 .stats-field select {
   font: inherit;
-  font-size: 0.88rem;
+  font-size: 0.82rem;
   font-weight: 600;
   text-transform: none;
   letter-spacing: 0;
   color: var(--ink);
-  padding: 9px 10px;
+  padding: 8px 8px;
   border-radius: 10px;
   border: 1px solid #cfdce8;
   background: #fff;
+  width: 100%;
+  min-width: 0;
+}
+
+.stats-field-type select {
+  font-size: 0.78rem;
+  padding: 8px 6px;
 }
 
 .stats-root {
@@ -1593,9 +1621,6 @@ main {
 
 @media (max-width: 420px) {
   .stats-summary {
-    grid-template-columns: 1fr;
-  }
-  .stats-toolbar {
     grid-template-columns: 1fr;
   }
 }
