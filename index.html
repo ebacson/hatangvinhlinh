@@ -163,7 +163,7 @@
       </nav>
 
       <div id="sheet-backdrop" hidden></div>
-      <aside id="detail-sheet" hidden aria-label="Cập nhật trạm">
+      <aside id="detail-sheet" hidden aria-label="Chi tiết trạm">
         <div class="sheet-header">
           <div style="flex: 1">
             <h2 id="detail-title">Trạm</h2>
@@ -172,46 +172,52 @@
           <button type="button" class="btn-text" id="detail-close">Đóng</button>
         </div>
 
-        <div class="field">
-          <label for="f-generator">Tên máy nổ</label>
-          <input id="f-generator" type="text" />
-        </div>
-        <div class="field">
-          <label for="f-fuel-type">Loại nhiên liệu</label>
-          <select id="f-fuel-type">
-            <option value="">—</option>
-            <option value="gasoline">Xăng</option>
-            <option value="diesel">Dầu</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="f-rate">Định mức (lít/giờ)</label>
-          <input id="f-rate" type="number" min="0" step="0.1" inputmode="decimal" />
-        </div>
-        <div class="field">
-          <label for="f-capacity">Dung tích bình (lít)</label>
-          <input id="f-capacity" type="number" min="0" step="0.1" inputmode="decimal" />
-        </div>
-        <div class="field">
-          <label for="f-level">Cập nhật mức nhiên liệu (%)</label>
-          <input id="f-level" type="number" min="0" max="100" step="0.1" inputmode="decimal" />
-        </div>
-
-        <div class="kv"><span>Dự báo nhiên liệu</span><strong id="detail-forecast">--</strong></div>
-        <div class="kv"><span>Thời gian đã chạy</span><strong id="detail-since">--</strong></div>
-        <div class="kv"><span>Tổng thời gian chạy</span><strong id="detail-total">--</strong></div>
-        <div class="kv"><span>Cập nhật bởi</span><strong id="detail-editor">--</strong></div>
-        <div class="kv"><span>Thời gian cập nhật</span><strong id="detail-edited-at">--</strong></div>
-
-        <section class="run-history" aria-label="Lịch sử chạy máy">
-          <h3 class="run-history-title">Lịch sử chạy máy</h3>
-          <div id="detail-run-history" class="run-history-list">
-            <p class="muted run-history-empty">Đang tải...</p>
+        <div id="detail-edit-panel" hidden>
+          <div class="field">
+            <label for="f-generator">Tên máy nổ</label>
+            <input id="f-generator" type="text" />
           </div>
-        </section>
+          <div class="field">
+            <label for="f-fuel-type">Loại nhiên liệu</label>
+            <select id="f-fuel-type">
+              <option value="">—</option>
+              <option value="gasoline">Xăng</option>
+              <option value="diesel">Dầu</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="f-rate">Định mức (lít/giờ)</label>
+            <input id="f-rate" type="number" min="0" step="0.1" inputmode="decimal" />
+          </div>
+          <div class="field">
+            <label for="f-capacity">Dung tích bình (lít)</label>
+            <input id="f-capacity" type="number" min="0" step="0.1" inputmode="decimal" />
+          </div>
+          <div class="field">
+            <label for="f-level">Cập nhật mức nhiên liệu (%)</label>
+            <input id="f-level" type="number" min="0" max="100" step="0.1" inputmode="decimal" />
+          </div>
 
-        <div class="sheet-actions">
-          <button type="button" class="btn" id="detail-save">Lưu</button>
+          <div class="kv"><span>Dự báo nhiên liệu</span><strong id="detail-forecast">--</strong></div>
+          <div class="kv"><span>Thời gian đã chạy</span><strong id="detail-since">--</strong></div>
+          <div class="kv"><span>Tổng thời gian chạy</span><strong id="detail-total">--</strong></div>
+          <div class="kv"><span>Cập nhật bởi</span><strong id="detail-editor">--</strong></div>
+          <div class="kv"><span>Thời gian cập nhật</span><strong id="detail-edited-at">--</strong></div>
+
+          <div class="sheet-actions">
+            <button type="button" class="btn" id="detail-save">Lưu</button>
+          </div>
+        </div>
+
+        <div id="detail-history-panel" hidden>
+          <section class="run-history" aria-label="Lịch sử chạy máy">
+            <h3 class="run-history-title">Lịch sử chạy máy</h3>
+            <div class="kv"><span>Thời gian đã chạy</span><strong id="history-since">--</strong></div>
+            <div class="kv"><span>Tổng thời gian chạy</span><strong id="history-total">--</strong></div>
+            <div id="detail-run-history" class="run-history-list">
+              <p class="muted run-history-empty">Đang tải...</p>
+            </div>
+          </section>
         </div>
       </aside>
     </div>

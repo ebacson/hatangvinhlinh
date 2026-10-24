@@ -36,6 +36,8 @@ const state = {
   query: '',
   alertTab: 0,
   selectedKey: null,
+  /** null | 'edit' | 'history' */
+  sheetMode: null,
   tick: Date.now(),
   stationsBound: false,
   runHistory: [],
@@ -313,7 +315,7 @@ function renderStations() {
       const active = s.mayNoLastAlertType === 'SC';
       return `<article class="station-card ${fuelClass}${active ? ' is-sc' : ''}" data-key="${escapeAttr(
         s.stationKey
-      )}" role="button" tabindex="0" style="--i:${index}">
+      )}" style="--i:${index}">
         <div class="station-accent" aria-hidden="true"></div>
         <div class="station-top">
           <div class="station-id">
@@ -343,7 +345,14 @@ function renderStations() {
             ? `<p class="station-edited">${escapeHtml(edited)}</p>`
             : '<p class="station-edited muted">Chưa có lần cập nhật thủ công</p>'
         }
-        <span class="station-chevron" aria-hidden="true">›</span>
+        <div class="station-actions">
+          <button type="button" class="btn-outline station-action-btn" data-action="edit" data-key="${escapeAttr(
+            s.stationKey
+          )}">Cập nhật</button>
+          <button type="button" class="btn station-action-btn" data-action="history" data-key="${escapeAttr(
+            s.stationKey
+          )}">Chi tiết</button>
+        </div>
       </article>`;
     })
     .join('');
@@ -529,10 +538,24 @@ function bindRunHistory(stationKey) {
   });
 }
 
+function openStationSheet(stationKey, mode) {
+  state.selectedKey = stationKey;
+  state.sheetMode = mode;
+  const sheet = $('#detail-sheet');
+  if (sheet) {
+    sheet.dataset.bound = '';
+    sheet.dataset.mode = mode;
+  }
+  if (mode !== 'history') stopRunHistoryListener();
+  render();
+}
+
 function renderDetail() {
   const sheet = $('#detail-sheet');
   const backdrop = $('#sheet-backdrop');
-  if (!state.selectedKey) {
+  const editPanel = $('#detail-edit-panel');
+  const historyPanel = $('#detail-history-panel');
+  if (!state.selectedKey || !state.sheetMode) {
     sheet.hidden = true;
     backdrop.hidden = true;
     stopRunHistoryListener();
@@ -541,41 +564,63 @@ function renderDetail() {
   const s = state.stations.find((x) => x.stationKey === state.selectedKey);
   if (!s) {
     state.selectedKey = null;
+    state.sheetMode = null;
     sheet.hidden = true;
     backdrop.hidden = true;
     stopRunHistoryListener();
     return;
   }
+  const isEdit = state.sheetMode === 'edit';
+  const isHistory = state.sheetMode === 'history';
   sheet.hidden = false;
   backdrop.hidden = false;
-  $('#detail-title').textContent = s.profile.maTram || s.stationKey;
+  editPanel.hidden = !isEdit;
+  historyPanel.hidden = !isHistory;
+  sheet.setAttribute('aria-label', isEdit ? 'Cập nhật trạm' : 'Chi tiết trạm');
+  $('#detail-title').textContent = isEdit
+    ? `Cập nhật · ${s.profile.maTram || s.stationKey}`
+    : `Chi tiết · ${s.profile.maTram || s.stationKey}`;
   $('#detail-subtitle').textContent = s.profile.tenTram || '';
-  if (!sheet.dataset.bound || sheet.dataset.key !== s.stationKey) {
-    $('#f-generator').value = s.profile.generatorName || '';
-    $('#f-fuel-type').value = s.profile.fuelType || '';
-    $('#f-rate').value = s.profile.fuelRateLitersPerHour ?? '';
-    $('#f-capacity').value = s.profile.tankCapacityLiters ?? '';
-    $('#f-level').value = s.profile.lastFuelPercent ?? '';
-    sheet.dataset.initialGenerator = $('#f-generator').value;
-    sheet.dataset.initialFuelType = $('#f-fuel-type').value;
-    sheet.dataset.initialRate = String($('#f-rate').value);
-    sheet.dataset.initialCapacity = String($('#f-capacity').value);
-    sheet.dataset.initialLevel = String($('#f-level').value);
-    sheet.dataset.key = s.stationKey;
-    sheet.dataset.bound = '1';
-    bindRunHistory(s.stationKey);
-  } else {
-    refreshRunHistoryFromCache(s);
+
+  if (isEdit) {
+    if (!sheet.dataset.bound || sheet.dataset.key !== s.stationKey || sheet.dataset.mode !== 'edit') {
+      $('#f-generator').value = s.profile.generatorName || '';
+      $('#f-fuel-type').value = s.profile.fuelType || '';
+      $('#f-rate').value = s.profile.fuelRateLitersPerHour ?? '';
+      $('#f-capacity').value = s.profile.tankCapacityLiters ?? '';
+      $('#f-level').value = s.profile.lastFuelPercent ?? '';
+      sheet.dataset.initialGenerator = $('#f-generator').value;
+      sheet.dataset.initialFuelType = $('#f-fuel-type').value;
+      sheet.dataset.initialRate = String($('#f-rate').value);
+      sheet.dataset.initialCapacity = String($('#f-capacity').value);
+      sheet.dataset.initialLevel = String($('#f-level').value);
+      sheet.dataset.key = s.stationKey;
+      sheet.dataset.mode = 'edit';
+      sheet.dataset.bound = '1';
+    }
+    const predicted = stationForecast(s);
+    $('#detail-forecast').textContent =
+      predicted == null ? 'Chưa đủ dữ liệu để dự báo' : formatPercent(predicted);
+    $('#detail-since').textContent = formatMinutes(s.stats.runMinutesSinceRefuel);
+    $('#detail-total').textContent = formatMinutes(s.stats.totalRunMinutes);
+    $('#detail-editor').textContent = s.profile.lastEditedBy || '--';
+    $('#detail-edited-at').textContent = s.profile.lastEditedAt
+      ? formatMillis(s.profile.lastEditedAt)
+      : '--';
   }
-  const predicted = stationForecast(s);
-  $('#detail-forecast').textContent =
-    predicted == null ? 'Chưa đủ dữ liệu để dự báo' : formatPercent(predicted);
-  $('#detail-since').textContent = formatMinutes(s.stats.runMinutesSinceRefuel);
-  $('#detail-total').textContent = formatMinutes(s.stats.totalRunMinutes);
-  $('#detail-editor').textContent = s.profile.lastEditedBy || '--';
-  $('#detail-edited-at').textContent = s.profile.lastEditedAt
-    ? formatMillis(s.profile.lastEditedAt)
-    : '--';
+
+  if (isHistory) {
+    $('#history-since').textContent = formatMinutes(s.stats.runMinutesSinceRefuel);
+    $('#history-total').textContent = formatMinutes(s.stats.totalRunMinutes);
+    if (state.runHistoryKey !== s.stationKey || !unsubRunHistory) {
+      bindRunHistory(s.stationKey);
+    } else {
+      refreshRunHistoryFromCache(s);
+    }
+    sheet.dataset.key = s.stationKey;
+    sheet.dataset.mode = 'history';
+    sheet.dataset.bound = '1';
+  }
 }
 
 function escapeHtml(s) {
@@ -736,11 +781,13 @@ function bindEvents() {
   });
 
   $('#stations-list').addEventListener('click', (e) => {
-    const card = e.target.closest('[data-key]');
-    if (!card) return;
-    state.selectedKey = card.dataset.key;
-    $('#detail-sheet').dataset.bound = '';
-    render();
+    const btn = e.target.closest('[data-action][data-key]');
+    if (!btn) return;
+    e.preventDefault();
+    const key = btn.dataset.key;
+    const action = btn.dataset.action;
+    if (action === 'edit') openStationSheet(key, 'edit');
+    else if (action === 'history') openStationSheet(key, 'history');
   });
 
   $('#alert-tabs').addEventListener('click', (e) => {
@@ -777,6 +824,7 @@ function bindEvents() {
 
 function closeDetail() {
   state.selectedKey = null;
+  state.sheetMode = null;
   stopRunHistoryListener();
   render();
 }
