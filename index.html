@@ -2,122 +2,127 @@
 <html lang="vi">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Điều khoản dịch vụ - 8386</title>
-    <style>
-      body {
-        font-family: Arial, sans-serif;
-        line-height: 1.6;
-        background: #f8f9fa;
-        margin: 0;
-        padding: 0;
-      }
-      .container {
-        max-width: 900px;
-        margin: 0 auto;
-        padding: 20px;
-      }
-      .card {
-        background: #fff;
-        border-radius: 8px;
-        padding: 24px;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-      }
-      h2, h3, h4, h5 {
-        margin-top: 20px;
-        color: #333;
-      }
-      ul {
-        padding-left: 20px;
-      }
-      button {
-        padding: 8px 16px;
-        border: none;
-        border-radius: 4px;
-        background: #007bff;
-        color: #fff;
-        cursor: pointer;
-      }
-      button:hover {
-        background: #0056b3;
-      }
-      footer {
-        margin-top: 32px;
-        padding: 16px;
-        text-align: center;
-        color: #666;
-        font-size: 13px;
-      }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#1a6fb5" />
+    <meta name="description" content="Hạ tầng Vĩnh Linh — theo dõi trạm, cảnh báo SC/KP và dự báo nhiên liệu máy nổ." />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="HT Vĩnh Linh" />
+    <title>Hạ tầng Vĩnh Linh</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icons/icon-192.png" type="image/png" />
+    <link rel="apple-touch-icon" href="icons/icon-192.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700&family=Sora:wght@600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/app.css" />
   </head>
   <body>
-    <div class="container">
-      <main class="card">
-        <section id="content">
-          <!-- BẮT ĐẦU: nội dung Điều khoản dịch vụ -->
-          <article>
-            <h2>ĐIỀU KHOẢN DỊCH VỤ</h2>
-            <h3>8386 - Ứng Dụng Dự Đoán Số Xổ Số</h3>
+    <header class="app-header">
+      <h1 class="brand">Hạ tầng Vĩnh Linh</h1>
+      <p class="tagline">Theo dõi trạm &amp; cảnh báo — đồng bộ với G Hunter</p>
+    </header>
 
-            <p><strong>Cập nhật lần cuối: 12/09/2025</strong></p>
+    <main>
+      <section class="panel" data-panel="stations">
+        <input
+          id="station-search"
+          class="search"
+          type="search"
+          placeholder="Tìm theo tên/mã trạm…"
+          autocomplete="off"
+        />
+        <div id="stations-empty" class="empty" hidden>Chưa có trạm nào.</div>
+        <div id="stations-list"></div>
+      </section>
 
-            <h4>1. CHẤP NHẬN ĐIỀU KHOẢN</h4>
-            <p>Bằng việc tải xuống, cài đặt và sử dụng ứng dụng 8386, bạn đồng ý tuân thủ các điều khoản và điều kiện này. Nếu bạn không đồng ý, vui lòng không sử dụng ứng dụng.</p>
+      <section class="panel" data-panel="alerts" hidden>
+        <div id="alert-tabs" class="chips" role="tablist"></div>
+        <div id="alerts-empty" class="empty" hidden>Không có cảnh báo đang active.</div>
+        <div id="alerts-list"></div>
+      </section>
 
-            <h4>2. MÔ TẢ DỊCH VỤ</h4>
-            <p>Ứng dụng 8386 là một ứng dụng giải trí cung cấp:</p>
-            <ul>
-              <li>Dự đoán số may mắn dựa trên tử vi và cung hoàng đạo kết hợp thuật toán tính xác suất bằng AI.</li>
-              <li>Thông tin tử vi cá nhân (cung hoàng đạo, ngũ hành, thiên can, địa chi).</li>
-              <li>Lưu trữ lịch sử dự đoán cá nhân để dự đoán cho lần tiếp theo.</li>
-            </ul>
+      <section class="panel" data-panel="monitor" hidden>
+        <p class="note">
+          Web app này <strong>không đọc SMS</strong>. Giám sát SC/KP chạy trên app Android G Hunter;
+          trang này chỉ xem và cập nhật dữ liệu trên Firebase.
+        </p>
+        <div class="card">
+          <h3>Trạng thái kết nối</h3>
+          <div class="status-row">
+            <span id="connection-dot" class="dot"></span>
+            <span id="connection-status">Đang kiểm tra…</span>
+          </div>
+          <p id="firebase-summary" class="muted small"></p>
+          <button type="button" id="ping-btn" class="btn-outline">Gửi ping lên cloud</button>
+        </div>
+      </section>
+    </main>
 
-            <h4>3. TÍNH CHẤT GIẢI TRÍ</h4>
-            <h5>3.1 Không đảm bảo kết quả:</h5>
-            <ul>
-              <li>Các dự đoán chỉ mang tính chất giải trí và tham khảo.</li>
-              <li>Chúng tôi <strong>KHÔNG</strong> đảm bảo tính chính xác của các dự đoán.</li>
-              <li>Kết quả xổ số là hoàn toàn ngẫu nhiên.</li>
-            </ul>
+    <nav class="bottom-nav" aria-label="Điều hướng chính">
+      <button type="button" class="nav-btn active" data-tab="stations">
+        <span class="icon" aria-hidden="true">📡</span>
+        Trạm
+      </button>
+      <button type="button" class="nav-btn" data-tab="alerts">
+        <span class="icon" aria-hidden="true">🔔</span>
+        Cảnh báo
+      </button>
+      <button type="button" class="nav-btn" data-tab="monitor">
+        <span class="icon" aria-hidden="true">☁️</span>
+        Monitor
+      </button>
+    </nav>
 
-            <h5>3.2 Không khuyến khích cờ bạc:</h5>
-            <ul>
-              <li>Ứng dụng không khuyến khích cờ bạc quá mức.</li>
-              <li>Người dùng chịu trách nhiệm về việc sử dụng dự đoán.</li>
-              <li>Chúng tôi không chịu trách nhiệm về tổn thất tài chính.</li>
-            </ul>
+    <div id="sheet-backdrop" hidden></div>
+    <aside id="detail-sheet" hidden aria-label="Cập nhật trạm">
+      <div class="sheet-header">
+        <div style="flex: 1">
+          <h2 id="detail-title">Trạm</h2>
+          <p id="detail-subtitle" class="muted"></p>
+        </div>
+        <button type="button" class="btn-text" id="detail-close">Đóng</button>
+      </div>
 
-            <h4>4. QUYỀN VÀ TRÁCH NHIỆM</h4>
-            <h5>4.1 Quyền của chúng tôi:</h5>
-            <ul>
-              <li>Chúng tôi cung cấp dịch vụ hoàn toàn miễn phí, không quảng cáo.</li>
-              <li>Thay đổi, cập nhật hoặc ngừng dịch vụ bất cứ lúc nào.</li>
-              <li>Từ chối dịch vụ cho người dùng vi phạm điều khoản.</li>
-              <li>Thu thập dữ liệu sử dụng để cải thiện dịch vụ.</li>
-            </ul>
+      <div class="field">
+        <label for="f-generator">Tên máy nổ</label>
+        <input id="f-generator" type="text" />
+      </div>
+      <div class="field">
+        <label for="f-fuel-type">Loại nhiên liệu</label>
+        <select id="f-fuel-type">
+          <option value="">—</option>
+          <option value="gasoline">Xăng</option>
+          <option value="diesel">Dầu</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="f-rate">Định mức (lít/giờ)</label>
+        <input id="f-rate" type="number" min="0" step="0.1" inputmode="decimal" />
+      </div>
+      <div class="field">
+        <label for="f-capacity">Dung tích bình (lít)</label>
+        <input id="f-capacity" type="number" min="0" step="0.1" inputmode="decimal" />
+      </div>
+      <div class="field">
+        <label for="f-level">Cập nhật mức nhiên liệu (%)</label>
+        <input id="f-level" type="number" min="0" max="100" step="0.1" inputmode="decimal" />
+      </div>
 
-            <h5>4.2 Trách nhiệm của người dùng:</h5>
-            <ul>
-              <li>Cung cấp thông tin chính xác.</li>
-              <li>Sử dụng ứng dụng đúng mục đích.</li>
-              <li>Không lạm dụng hoặc tấn công hệ thống.</li>
-              <li>Tuân thủ pháp luật hiện hành.</li>
-            </ul>
+      <div class="kv"><span>Dự báo nhiên liệu</span><strong id="detail-forecast">--</strong></div>
+      <div class="kv"><span>Thời gian đã chạy</span><strong id="detail-since">--</strong></div>
+      <div class="kv"><span>Tổng thời gian chạy</span><strong id="detail-total">--</strong></div>
 
-            <h4>5. HẠN CHẾ TRÁCH NHIỆM</h4>
-            <h5>5.1 Chúng tôi không chịu trách nhiệm cho:</h5>
-            <ul>
-              <li>Tổn thất tài chính do sử dụng dự đoán.</li>
-              <li>Gián đoạn dịch vụ do lý do kỹ thuật.</li>
-              <li>Thiệt hại gián tiếp hoặc hậu quả.</li>
-              <li>Hành vi của người dùng khác.</li>
-            </ul>
-            <h5>5.2 Giới hạn trách nhiệm:</h5>
-            <p>Ứng dụng miễn phí hoàn toàn, vì vậy chúng tôi không chịu bất cứ trách nhiệm nào bất kể lý do gì.</p>
+      <div class="sheet-actions">
+        <button type="button" class="btn" id="detail-save">Lưu</button>
+      </div>
+    </aside>
 
-            <h4>6. SỞ HỮU TRÍ TUỆ</h4>
-            <h5>6.1 Quyền sở hữu:</h5>
-            <ul>
-              <li>Ứng dụng và nội dung thuộc sở hữu của chúng tôi.</li>
-              <li>Người dùng được cấp giấy phép sử dụng hạn chế.</li>
-              <li>Không được sao chép, phân phối
+    <div id="toast" hidden role="status"></div>
+
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>

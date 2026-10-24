@@ -1,0 +1,25 @@
+{
+  "name": "Hạ tầng Vĩnh Linh",
+  "short_name": "HT Vĩnh Linh",
+  "description": "Theo dõi trạm, cảnh báo SC/KP và dự báo nhiên liệu máy nổ.",
+  "start_url": "/hatangvinhlinh/",
+  "scope": "/hatangvinhlinh/",
+  "display": "standalone",
+  "background_color": "#e8eef4",
+  "theme_color": "#1a6fb5",
+  "lang": "vi",
+  "icons": [
+    {
+      "src": "/hatangvinhlinh/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/hatangvinhlinh/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
