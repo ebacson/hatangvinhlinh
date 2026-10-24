@@ -1,12 +1,17 @@
-const CACHE = 'htvl-v15';
+const CACHE = 'htvl-v16';
 const BASE = '/hatangvinhlinh';
 const ASSETS = [
   `${BASE}/`,
   `${BASE}/index.html`,
+  `${BASE}/index.html?v=16`,
   `${BASE}/css/app.css`,
+  `${BASE}/css/app.css?v=16`,
   `${BASE}/js/app.js`,
+  `${BASE}/js/app.js?v=16`,
   `${BASE}/js/config.js`,
+  `${BASE}/js/config.js?v=16`,
   `${BASE}/js/forecast.js`,
+  `${BASE}/js/forecast.js?v=16`,
   `${BASE}/manifest.webmanifest`,
   `${BASE}/icons/icon-192.png`,
   `${BASE}/icons/icon-512.png`,
@@ -59,10 +64,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // HTML/JS/CSS: network-first so GitHub Pages deploys show up quickly
+  // HTML/JS/CSS: network-first, bypass HTTP cache (Chrome Android PWA hay giữ bản cũ)
   if (req.mode === 'navigate' || isAppShell(url)) {
     event.respondWith(
-      fetch(req)
+      fetch(req, { cache: 'no-store' })
         .then((res) => {
           if (res.ok) {
             const copy = res.clone();
@@ -70,7 +75,11 @@ self.addEventListener('fetch', (event) => {
           }
           return res;
         })
-        .catch(() => caches.match(req).then((c) => c || caches.match(`${BASE}/index.html`)))
+        .catch(() =>
+          caches
+            .match(req)
+            .then((c) => c || caches.match(`${BASE}/index.html`) || caches.match(`${BASE}/index.html?v=16`))
+        )
     );
     return;
   }

@@ -13,7 +13,7 @@ import {
   set,
   serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-database.js';
-import { BASE, firebaseConfig, ALERT_TABS, LONG_RUN_MS, LOW_FUEL_PERCENT } from './config.js';
+import { BASE, APP_VERSION, firebaseConfig, ALERT_TABS, LONG_RUN_MS, LOW_FUEL_PERCENT } from './config.js?v=16';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -21,7 +21,7 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js';
+} from './forecast.js?v=16';
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -234,6 +234,11 @@ function render() {
   }
   showAuth(false);
   $('#user-label').textContent = currentUserLabel();
+  const ver = $('#app-version');
+  if (ver) {
+    ver.hidden = false;
+    ver.textContent = `bản ${APP_VERSION}`;
+  }
 
   $$('.nav-btn').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.tab === state.tab);

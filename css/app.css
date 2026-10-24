@@ -77,6 +77,12 @@ body {
   font-size: 0.92rem;
 }
 
+.app-version {
+  margin: 2px 0 0;
+  color: #8a9aab;
+  font-size: 0.72rem;
+}
+
 .editor-line {
   margin-top: 6px;
   font-style: italic;
