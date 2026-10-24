@@ -1,5 +1,13 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js';
 import {
+  getAuth,
+  onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  updateProfile,
+} from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js';
+import {
   getDatabase,
   ref,
   onValue,
@@ -18,17 +26,21 @@ import {
 } from './forecast.js';
 
 const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
 const db = getDatabase(app);
 const stationsRef = ref(db, 'stations');
 
 const state = {
+  user: null,
+  displayName: '',
   tab: 'stations',
   stations: [],
   query: '',
   alertTab: 0,
   selectedKey: null,
-  connected: null,
   tick: Date.now(),
+  authMode: 'login',
+  stationsBound: false,
 };
 
 const $ = (sel, el = document) => el.querySelector(sel);
@@ -47,6 +59,15 @@ function toNum(v) {
   return null;
 }
 
+function currentUserLabel() {
+  return (
+    state.displayName ||
+    state.user?.displayName ||
+    state.user?.email ||
+    'Người dùng'
+  );
+}
+
 function parseStation(key, raw) {
   const profile = raw.profile || {};
   const stats = raw.stats || {};
@@ -63,6 +84,9 @@ function parseStation(key, raw) {
       tankCapacityLiters: toNum(profile.tankCapacityLiters),
       lastFuelPercent: toNum(profile.lastFuelPercent),
       lastFuelTotalRunMinutes: toNum(profile.lastFuelTotalRunMinutes),
+      lastEditedBy: profile.lastEditedBy || null,
+      lastEditedByUid: profile.lastEditedByUid || null,
+      lastEditedAt: toNum(profile.lastEditedAt),
     },
     stats: {
       totalRunMinutes: toNum(stats.totalRunMinutes),
@@ -107,11 +131,11 @@ function activeAlerts(deviceType) {
         stationKey: s.stationKey,
         maTram: s.profile.maTram || s.stationKey,
         tenTram: s.profile.tenTram || '',
-        diaChi: s.profile.diaChi || '',
         alertAt: scAt || updatedAt,
         scEventTime: status.scEventTime || null,
         profile: s.profile,
         stats: s.stats,
+        clearedBy: status.clearedBy || null,
         deviceType,
       };
     })
@@ -119,9 +143,109 @@ function activeAlerts(deviceType) {
     .sort((a, b) => a.maTram.localeCompare(b.maTram, 'vi'));
 }
 
+function editorLine(profile) {
+  if (!profile.lastEditedBy && !profile.lastEditedAt) return null;
+  const who = profile.lastEditedBy || '—';
+  const when = profile.lastEditedAt ? formatMillis(profile.lastEditedAt) : '—';
+  return `Cập nhật: ${who} · ${when}`;
+}
+
+/* ---------- Auth UI ---------- */
+
+function showAuth(show) {
+  $('#auth-screen').hidden = !show;
+  $('#app-shell').hidden = show;
+}
+
+function setAuthMode(mode) {
+  state.authMode = mode;
+  $$('.auth-tab').forEach((t) => t.classList.toggle('active', t.dataset.authMode === mode));
+  $('#field-name').hidden = mode !== 'register';
+  $('#auth-name').required = mode === 'register';
+  $('#auth-submit').textContent = mode === 'register' ? 'Đăng ký' : 'Đăng nhập';
+  $('#auth-password').autocomplete = mode === 'register' ? 'new-password' : 'current-password';
+  $('#auth-error').hidden = true;
+}
+
+function showAuthError(msg) {
+  const el = $('#auth-error');
+  el.textContent = msg;
+  el.hidden = !msg;
+}
+
+function authErrorMessage(code) {
+  switch (code) {
+    case 'auth/email-already-in-use':
+      return 'Email đã được đăng ký.';
+    case 'auth/invalid-email':
+      return 'Email không hợp lệ.';
+    case 'auth/weak-password':
+      return 'Mật khẩu cần ít nhất 6 ký tự.';
+    case 'auth/user-not-found':
+    case 'auth/wrong-password':
+    case 'auth/invalid-credential':
+      return 'Email hoặc mật khẩu không đúng.';
+    case 'auth/too-many-requests':
+      return 'Thử quá nhiều lần. Vui lòng đợi rồi thử lại.';
+    case 'auth/network-request-failed':
+      return 'Lỗi mạng. Kiểm tra kết nối.';
+    case 'auth/operation-not-allowed':
+      return 'Chưa bật đăng nhập Email/Password trên Firebase Console.';
+    default:
+      return 'Không thể xác thực. Thử lại.';
+  }
+}
+
+async function handleAuthSubmit(e) {
+  e.preventDefault();
+  const email = $('#auth-email').value.trim();
+  const password = $('#auth-password').value;
+  const name = $('#auth-name').value.trim();
+  const btn = $('#auth-submit');
+  btn.disabled = true;
+  showAuthError('');
+  try {
+    if (state.authMode === 'register') {
+      if (!name) {
+        showAuthError('Vui lòng nhập họ và tên.');
+        return;
+      }
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      await updateProfile(cred.user, { displayName: name });
+      await set(ref(db, `users/${cred.user.uid}`), {
+        displayName: name,
+        email,
+        createdAt: serverTimestamp(),
+      });
+      toast('Đăng ký thành công');
+    } else {
+      await signInWithEmailAndPassword(auth, email, password);
+      toast('Đã đăng nhập');
+    }
+  } catch (err) {
+    showAuthError(authErrorMessage(err.code) + (err.code ? '' : ` (${err.message || err})`));
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function handleLogout() {
+  await signOut(auth);
+  state.stations = [];
+  state.selectedKey = null;
+  toast('Đã đăng xuất');
+}
+
 /* ---------- Render ---------- */
 
 function render() {
+  if (!state.user) {
+    showAuth(true);
+    return;
+  }
+  showAuth(false);
+  $('#user-label').textContent = currentUserLabel();
+
   $$('.nav-btn').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.tab === state.tab);
   });
@@ -131,7 +255,6 @@ function render() {
 
   if (state.tab === 'stations') renderStations();
   if (state.tab === 'alerts') renderAlerts();
-  if (state.tab === 'monitor') renderMonitor();
   renderDetail();
 }
 
@@ -167,6 +290,7 @@ function renderStations() {
           : `Lần chạy gần nhất: ${formatMinutes(s.stats.lastRunMinutes)}${
               s.stats.lastKpAt ? ` · ${formatMillis(s.stats.lastKpAt)}` : ''
             }`;
+      const edited = editorLine(s.profile);
       const active = s.mayNoLastAlertType === 'SC' ? '<span class="badge badge-warn">Đang SC</span>' : '';
       return `<article class="card station-card" data-key="${escapeAttr(s.stationKey)}" role="button" tabindex="0">
         <div class="card-title-row"><h3>${title}</h3>${active}</div>
@@ -174,6 +298,7 @@ function renderStations() {
         <p class="forecast">${escapeHtml(forecast)}</p>
         <p class="muted small">${escapeHtml(runLine)}</p>
         <p class="muted small">${escapeHtml(last)}</p>
+        ${edited ? `<p class="muted small editor-line">${escapeHtml(edited)}</p>` : ''}
       </article>`;
     })
     .join('');
@@ -237,22 +362,6 @@ function renderAlerts() {
     .join('');
 }
 
-function renderMonitor() {
-  const status = $('#connection-status');
-  const dot = $('#connection-dot');
-  if (state.connected == null) {
-    status.textContent = 'Đang kiểm tra…';
-    dot.className = 'dot';
-  } else if (state.connected) {
-    status.textContent = 'Đã kết nối cloud';
-    dot.className = 'dot online';
-  } else {
-    status.textContent = 'Chưa kết nối / mất kết nối';
-    dot.className = 'dot offline';
-  }
-  $('#firebase-summary').textContent = `Database: ${firebaseConfig.databaseURL}`;
-}
-
 function renderDetail() {
   const sheet = $('#detail-sheet');
   const backdrop = $('#sheet-backdrop');
@@ -291,6 +400,10 @@ function renderDetail() {
     predicted == null ? 'Chưa đủ dữ liệu để dự báo' : formatPercent(predicted);
   $('#detail-since').textContent = formatMinutes(s.stats.runMinutesSinceRefuel);
   $('#detail-total').textContent = formatMinutes(s.stats.totalRunMinutes);
+  $('#detail-editor').textContent = s.profile.lastEditedBy || '--';
+  $('#detail-edited-at').textContent = s.profile.lastEditedAt
+    ? formatMillis(s.profile.lastEditedAt)
+    : '--';
 }
 
 function escapeHtml(s) {
@@ -307,6 +420,7 @@ function escapeAttr(s) {
 /* ---------- Actions ---------- */
 
 async function dismissAlert(stationKey, deviceType) {
+  if (!state.user) return;
   const label =
     state.stations.find((s) => s.stationKey === stationKey)?.profile.maTram || stationKey;
   if (
@@ -317,6 +431,7 @@ async function dismissAlert(stationKey, deviceType) {
     return;
   }
   const now = Date.now();
+  const who = currentUserLabel();
   const statusPath = `stations/${stationKey}/deviceStatus/${sanitizeKey(deviceType)}`;
   try {
     await update(ref(db, statusPath), {
@@ -324,11 +439,19 @@ async function dismissAlert(stationKey, deviceType) {
       lastEventAtMillis: now,
       clearedAt: serverTimestamp(),
       clearedManually: true,
+      clearedBy: who,
+      clearedByUid: state.user.uid,
       scAtMillis: null,
       scEventTime: null,
       updatedAt: serverTimestamp(),
     });
-    await set(ref(db, `stations/${stationKey}/profile/lastAlertType`), 'CLEARED');
+    await update(ref(db, `stations/${stationKey}/profile`), {
+      lastAlertType: 'CLEARED',
+      lastEditedBy: who,
+      lastEditedByUid: state.user.uid,
+      lastEditedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
     toast('Đã xóa cảnh báo');
   } catch (e) {
     toast('Xóa thất bại: ' + (e.message || e));
@@ -337,7 +460,7 @@ async function dismissAlert(stationKey, deviceType) {
 
 async function saveStation() {
   const key = state.selectedKey;
-  if (!key) return;
+  if (!key || !state.user) return;
   const sheet = $('#detail-sheet');
   const genName = $('#f-generator').value.trim();
   const fuelType = $('#f-fuel-type').value || null;
@@ -349,10 +472,20 @@ async function saveStation() {
   const capChanged = capText !== sheet.dataset.initialCapacity;
   const levelChanged = levelText !== sheet.dataset.initialLevel;
   const fuelTypeChanged = (fuelType || '') !== sheet.dataset.initialFuelType;
+  const genChanged = genName !== sheet.dataset.initialGenerator;
 
+  if (!rateChanged && !capChanged && !levelChanged && !fuelTypeChanged && !genChanged) {
+    toast('Không có thay đổi');
+    return;
+  }
+
+  const who = currentUserLabel();
   const updates = {
     generatorName: genName,
     updatedAt: serverTimestamp(),
+    lastEditedBy: who,
+    lastEditedByUid: state.user.uid,
+    lastEditedAt: serverTimestamp(),
   };
   if (fuelTypeChanged) updates.fuelType = fuelType || null;
   if (rateChanged) updates.fuelRateLitersPerHour = rateText === '' ? null : Number(rateText);
@@ -395,19 +528,6 @@ async function saveStation() {
   }
 }
 
-async function ping() {
-  const btn = $('#ping-btn');
-  btn.disabled = true;
-  try {
-    await set(ref(db, 'connectionTest/lastPing'), serverTimestamp());
-    toast('Đã ghi connectionTest/lastPing');
-  } catch (e) {
-    toast('Ghi thất bại: ' + (e.message || e));
-  } finally {
-    btn.disabled = false;
-  }
-}
-
 function toast(msg) {
   const el = $('#toast');
   el.textContent = msg;
@@ -421,6 +541,12 @@ function toast(msg) {
 /* ---------- Wire up ---------- */
 
 function bindEvents() {
+  $$('.auth-tab').forEach((tab) => {
+    tab.addEventListener('click', () => setAuthMode(tab.dataset.authMode));
+  });
+  $('#auth-form').addEventListener('submit', handleAuthSubmit);
+  $('#logout-btn').addEventListener('click', handleLogout);
+
   $$('.nav-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       state.tab = btn.dataset.tab;
@@ -467,7 +593,6 @@ function bindEvents() {
   $('#sheet-backdrop').addEventListener('click', closeDetail);
   $('#detail-close').addEventListener('click', closeDetail);
   $('#detail-save').addEventListener('click', saveStation);
-  $('#ping-btn').addEventListener('click', ping);
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeDetail();
@@ -479,13 +604,11 @@ function closeDetail() {
   render();
 }
 
-function startListeners() {
-  onValue(ref(db, '.info/connected'), (snap) => {
-    state.connected = snap.val() === true;
-    if (state.tab === 'monitor') renderMonitor();
-  });
-
+function bindStationsListener() {
+  if (state.stationsBound) return;
+  state.stationsBound = true;
   onValue(stationsRef, (snap) => {
+    if (!state.user) return;
     const val = snap.val() || {};
     state.stations = Object.keys(val)
       .map((k) => parseStation(k, val[k] || {}))
@@ -494,24 +617,49 @@ function startListeners() {
       );
     render();
   });
+}
 
-  setInterval(() => {
-    state.tick = Date.now();
-    if (state.tab === 'alerts') renderAlerts();
-    if (state.tab === 'stations' && state.stations.some((s) => s.mayNoLastAlertType === 'SC')) {
-      renderStations();
+function startAuth() {
+  onAuthStateChanged(auth, async (user) => {
+    state.user = user;
+    if (user) {
+      state.displayName = user.displayName || '';
+      if (!state.displayName) {
+        onValue(
+          ref(db, `users/${user.uid}/displayName`),
+          (snap) => {
+            if (snap.val()) state.displayName = snap.val();
+            render();
+          },
+          { onlyOnce: true }
+        );
+      }
+      bindStationsListener();
+    } else {
+      state.displayName = '';
+      state.selectedKey = null;
     }
-    if (state.selectedKey) renderDetail();
-  }, 60_000);
+    render();
+  });
 }
 
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
-  const swUrl = `${BASE}/sw.js`;
-  navigator.serviceWorker.register(swUrl, { scope: `${BASE}/` }).catch(() => {});
+  navigator.serviceWorker.register(`${BASE}/sw.js`, { scope: `${BASE}/` }).catch(() => {});
 }
 
 bindEvents();
-startListeners();
+setAuthMode('login');
+startAuth();
 registerSW();
 render();
+
+setInterval(() => {
+  state.tick = Date.now();
+  if (!state.user) return;
+  if (state.tab === 'alerts') renderAlerts();
+  if (state.tab === 'stations' && state.stations.some((s) => s.mayNoLastAlertType === 'SC')) {
+    renderStations();
+  }
+  if (state.selectedKey) renderDetail();
+}, 60_000);

@@ -2,43 +2,32 @@
 
 PWA theo dõi trạm BTS / máy nổ — đồng bộ Firebase Realtime Database với app Android **G Hunter**.
 
-**Không đọc SMS.** Phần giám sát SC/KP chạy trên Android; web chỉ xem danh sách trạm, cảnh báo đang active, cập nhật nhiên liệu và kiểm tra kết nối.
+**Không đọc SMS.** Giám sát SC/KP chạy trên Android; web dùng để xem trạm, cảnh báo và cập nhật nhiên liệu (sau khi đăng nhập).
 
-## GitHub Pages
+## Site
 
-- Site: https://ebacson.github.io/hatangvinhlinh/
-- Branch `main`, thư mục gốc `/`
+https://ebacson.github.io/hatangvinhlinh/
 
 ## Tính năng
 
-| Tab | Chức năng |
-|-----|-----------|
-| **Trạm** | Tìm kiếm, sắp theo dự báo nhiên liệu thấp → cao, mở chi tiết để cập nhật máy nổ / nhiên liệu |
-| **Cảnh báo** | 4 loại (Máy nổ, Mất AC, DC thấp, Mất LL); xóa cảnh báo sai / kéo dài |
-| **Monitor** | Trạng thái kết nối Firebase, ping thử |
+| | |
+|--|--|
+| **Đăng ký / Đăng nhập** | Email + mật khẩu, lưu họ tên |
+| **Trạm** | Tìm kiếm, dự báo nhiên liệu, cập nhật máy nổ; hiện *ai cập nhật* và *thời gian* |
+| **Cảnh báo** | 4 loại; xóa cảnh báo sai (ghi tên người xóa) |
 
-## Cài PWA trên điện thoại
+## Firebase Console (bắt buộc)
 
-1. Mở https://ebacson.github.io/hatangvinhlinh/ bằng Chrome / Safari  
-2. **Thêm vào Màn hình chính** / Install app  
+1. **Authentication** → Sign-in method → bật **Email/Password**
+2. **Authentication** → Settings → Authorized domains → thêm `ebacson.github.io`
+3. Realtime Database rules: cho phép đọc/ghi (hoặc siết theo `auth != null` nếu Android cũng dùng Auth)
 
-## Firebase
+Khi lưu trạm, web ghi vào `profile`:
 
-Project: `ghunter-4b0a8` — cùng RTDB với G Hunter (`/stations`).
+- `lastEditedBy` — họ tên
+- `lastEditedByUid` — uid
+- `lastEditedAt` — timestamp
 
-Nếu trình duyệt bị chặn đọc/ghi, thêm domain `ebacson.github.io` vào Firebase Console → Authentication → Settings → Authorized domains (và kiểm tra RTDB rules).
+## Cài PWA
 
-## Cấu trúc
-
-```
-index.html
-css/app.css
-js/config.js      # Firebase + BASE path GitHub Pages
-js/forecast.js
-js/app.js
-manifest.webmanifest
-sw.js
-icons/
-```
-
-File cũ của repo (điều khoản 8386): `dieu-khoan-8386.html`, `xoso.html`, `app-ads.txt`.
+Chrome/Safari → mở site → **Thêm vào Màn hình chính**.

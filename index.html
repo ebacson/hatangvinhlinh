@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#1a6fb5" />
-    <meta name="description" content="Hạ tầng Vĩnh Linh — theo dõi trạm, cảnh báo SC/KP và dự báo nhiên liệu máy nổ." />
+    <meta name="description" content="Hạ tầng Vĩnh Linh — theo dõi trạm, cảnh báo và dự báo nhiên liệu máy nổ." />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="HT Vĩnh Linh" />
@@ -21,105 +21,128 @@
     <link rel="stylesheet" href="css/app.css" />
   </head>
   <body>
-    <header class="app-header">
-      <h1 class="brand">Hạ tầng Vĩnh Linh</h1>
-      <p class="tagline">Theo dõi trạm &amp; cảnh báo — đồng bộ với G Hunter</p>
-    </header>
+    <!-- Auth -->
+    <div id="auth-screen" class="auth-screen" hidden>
+      <div class="auth-card">
+        <h1 class="brand">Hạ tầng Vĩnh Linh</h1>
+        <p class="tagline auth-tag">Đăng nhập để xem và cập nhật trạm</p>
 
-    <main>
-      <section class="panel" data-panel="stations">
-        <input
-          id="station-search"
-          class="search"
-          type="search"
-          placeholder="Tìm theo tên/mã trạm…"
-          autocomplete="off"
-        />
-        <div id="stations-empty" class="empty" hidden>Chưa có trạm nào.</div>
-        <div id="stations-list"></div>
-      </section>
+        <div class="auth-tabs">
+          <button type="button" class="auth-tab active" data-auth-mode="login">Đăng nhập</button>
+          <button type="button" class="auth-tab" data-auth-mode="register">Đăng ký</button>
+        </div>
 
-      <section class="panel" data-panel="alerts" hidden>
-        <div id="alert-tabs" class="chips" role="tablist"></div>
-        <div id="alerts-empty" class="empty" hidden>Không có cảnh báo đang active.</div>
-        <div id="alerts-list"></div>
-      </section>
-
-      <section class="panel" data-panel="monitor" hidden>
-        <p class="note">
-          Web app này <strong>không đọc SMS</strong>. Giám sát SC/KP chạy trên app Android G Hunter;
-          trang này chỉ xem và cập nhật dữ liệu trên Firebase.
-        </p>
-        <div class="card">
-          <h3>Trạng thái kết nối</h3>
-          <div class="status-row">
-            <span id="connection-dot" class="dot"></span>
-            <span id="connection-status">Đang kiểm tra…</span>
+        <form id="auth-form" autocomplete="on">
+          <div class="field" id="field-name" hidden>
+            <label for="auth-name">Họ và tên</label>
+            <input id="auth-name" type="text" name="name" autocomplete="name" placeholder="Nguyễn Văn A" />
           </div>
-          <p id="firebase-summary" class="muted small"></p>
-          <button type="button" id="ping-btn" class="btn-outline">Gửi ping lên cloud</button>
+          <div class="field">
+            <label for="auth-email">Email</label>
+            <input id="auth-email" type="email" name="email" required autocomplete="username" placeholder="email@example.com" />
+          </div>
+          <div class="field">
+            <label for="auth-password">Mật khẩu</label>
+            <input id="auth-password" type="password" name="password" required minlength="6" autocomplete="current-password" placeholder="Ít nhất 6 ký tự" />
+          </div>
+          <p id="auth-error" class="auth-error" hidden></p>
+          <button type="submit" class="btn auth-submit" id="auth-submit">Đăng nhập</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- App shell -->
+    <div id="app-shell" hidden>
+      <header class="app-header">
+        <div class="header-row">
+          <div>
+            <h1 class="brand">Hạ tầng Vĩnh Linh</h1>
+            <p class="tagline">Theo dõi trạm &amp; cảnh báo</p>
+          </div>
+          <div class="user-menu">
+            <span id="user-label" class="user-label"></span>
+            <button type="button" class="btn-text" id="logout-btn">Thoát</button>
+          </div>
         </div>
-      </section>
-    </main>
+      </header>
 
-    <nav class="bottom-nav" aria-label="Điều hướng chính">
-      <button type="button" class="nav-btn active" data-tab="stations">
-        <span class="icon" aria-hidden="true">📡</span>
-        Trạm
-      </button>
-      <button type="button" class="nav-btn" data-tab="alerts">
-        <span class="icon" aria-hidden="true">🔔</span>
-        Cảnh báo
-      </button>
-      <button type="button" class="nav-btn" data-tab="monitor">
-        <span class="icon" aria-hidden="true">☁️</span>
-        Monitor
-      </button>
-    </nav>
+      <main>
+        <section class="panel" data-panel="stations">
+          <input
+            id="station-search"
+            class="search"
+            type="search"
+            placeholder="Tìm theo tên/mã trạm…"
+            autocomplete="off"
+          />
+          <div id="stations-empty" class="empty" hidden>Chưa có trạm nào.</div>
+          <div id="stations-list"></div>
+        </section>
 
-    <div id="sheet-backdrop" hidden></div>
-    <aside id="detail-sheet" hidden aria-label="Cập nhật trạm">
-      <div class="sheet-header">
-        <div style="flex: 1">
-          <h2 id="detail-title">Trạm</h2>
-          <p id="detail-subtitle" class="muted"></p>
+        <section class="panel" data-panel="alerts" hidden>
+          <div id="alert-tabs" class="chips" role="tablist"></div>
+          <div id="alerts-empty" class="empty" hidden>Không có cảnh báo đang active.</div>
+          <div id="alerts-list"></div>
+        </section>
+      </main>
+
+      <nav class="bottom-nav" aria-label="Điều hướng chính">
+        <button type="button" class="nav-btn active" data-tab="stations">
+          <span class="icon" aria-hidden="true">📡</span>
+          Trạm
+        </button>
+        <button type="button" class="nav-btn" data-tab="alerts">
+          <span class="icon" aria-hidden="true">🔔</span>
+          Cảnh báo
+        </button>
+      </nav>
+
+      <div id="sheet-backdrop" hidden></div>
+      <aside id="detail-sheet" hidden aria-label="Cập nhật trạm">
+        <div class="sheet-header">
+          <div style="flex: 1">
+            <h2 id="detail-title">Trạm</h2>
+            <p id="detail-subtitle" class="muted"></p>
+          </div>
+          <button type="button" class="btn-text" id="detail-close">Đóng</button>
         </div>
-        <button type="button" class="btn-text" id="detail-close">Đóng</button>
-      </div>
 
-      <div class="field">
-        <label for="f-generator">Tên máy nổ</label>
-        <input id="f-generator" type="text" />
-      </div>
-      <div class="field">
-        <label for="f-fuel-type">Loại nhiên liệu</label>
-        <select id="f-fuel-type">
-          <option value="">—</option>
-          <option value="gasoline">Xăng</option>
-          <option value="diesel">Dầu</option>
-        </select>
-      </div>
-      <div class="field">
-        <label for="f-rate">Định mức (lít/giờ)</label>
-        <input id="f-rate" type="number" min="0" step="0.1" inputmode="decimal" />
-      </div>
-      <div class="field">
-        <label for="f-capacity">Dung tích bình (lít)</label>
-        <input id="f-capacity" type="number" min="0" step="0.1" inputmode="decimal" />
-      </div>
-      <div class="field">
-        <label for="f-level">Cập nhật mức nhiên liệu (%)</label>
-        <input id="f-level" type="number" min="0" max="100" step="0.1" inputmode="decimal" />
-      </div>
+        <div class="field">
+          <label for="f-generator">Tên máy nổ</label>
+          <input id="f-generator" type="text" />
+        </div>
+        <div class="field">
+          <label for="f-fuel-type">Loại nhiên liệu</label>
+          <select id="f-fuel-type">
+            <option value="">—</option>
+            <option value="gasoline">Xăng</option>
+            <option value="diesel">Dầu</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="f-rate">Định mức (lít/giờ)</label>
+          <input id="f-rate" type="number" min="0" step="0.1" inputmode="decimal" />
+        </div>
+        <div class="field">
+          <label for="f-capacity">Dung tích bình (lít)</label>
+          <input id="f-capacity" type="number" min="0" step="0.1" inputmode="decimal" />
+        </div>
+        <div class="field">
+          <label for="f-level">Cập nhật mức nhiên liệu (%)</label>
+          <input id="f-level" type="number" min="0" max="100" step="0.1" inputmode="decimal" />
+        </div>
 
-      <div class="kv"><span>Dự báo nhiên liệu</span><strong id="detail-forecast">--</strong></div>
-      <div class="kv"><span>Thời gian đã chạy</span><strong id="detail-since">--</strong></div>
-      <div class="kv"><span>Tổng thời gian chạy</span><strong id="detail-total">--</strong></div>
+        <div class="kv"><span>Dự báo nhiên liệu</span><strong id="detail-forecast">--</strong></div>
+        <div class="kv"><span>Thời gian đã chạy</span><strong id="detail-since">--</strong></div>
+        <div class="kv"><span>Tổng thời gian chạy</span><strong id="detail-total">--</strong></div>
+        <div class="kv"><span>Cập nhật bởi</span><strong id="detail-editor">--</strong></div>
+        <div class="kv"><span>Thời gian cập nhật</span><strong id="detail-edited-at">--</strong></div>
 
-      <div class="sheet-actions">
-        <button type="button" class="btn" id="detail-save">Lưu</button>
-      </div>
-    </aside>
+        <div class="sheet-actions">
+          <button type="button" class="btn" id="detail-save">Lưu</button>
+        </div>
+      </aside>
+    </div>
 
     <div id="toast" hidden role="status"></div>
 
