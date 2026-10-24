@@ -23,31 +23,113 @@
   <body>
     <!-- Auth -->
     <div id="auth-screen" class="auth-screen" hidden>
-      <div class="auth-card">
-        <h1 class="brand">Hạ tầng Vĩnh Linh</h1>
-        <p class="tagline auth-tag">Đăng nhập để xem và cập nhật trạm</p>
+      <div class="auth-layout">
+        <aside class="auth-hero" aria-hidden="true">
+          <div class="auth-hero-bg"></div>
+          <div class="auth-hero-content">
+            <div class="auth-mark">
+              <svg viewBox="0 0 48 48" width="48" height="48" fill="none" aria-hidden="true">
+                <rect width="48" height="48" rx="12" fill="rgba(255,255,255,0.14)" />
+                <path d="M14 34V14h5.2v7.6H28.8V14H34v20h-5.2V26.2H19.2V34H14z" fill="#fff" />
+              </svg>
+            </div>
+            <p class="auth-hero-kicker">Giám sát hạ tầng</p>
+            <h1 class="auth-hero-title">Hạ tầng<br />Vĩnh Linh</h1>
+            <p class="auth-hero-desc">
+              Theo dõi trạng thái trạm, cảnh báo sự cố và dự báo nhiên liệu máy nổ — đồng bộ realtime.
+            </p>
+            <ul class="auth-hero-points">
+              <li>Danh sách trạm &amp; dự báo nhiên liệu</li>
+              <li>Cảnh báo SC đang active</li>
+              <li>Lưu lịch sử người cập nhật</li>
+            </ul>
+          </div>
+        </aside>
 
-        <div class="auth-tabs">
-          <button type="button" class="auth-tab active" data-auth-mode="login">Đăng nhập</button>
-          <button type="button" class="auth-tab" data-auth-mode="register">Đăng ký</button>
-        </div>
+        <section class="auth-panel">
+          <div class="auth-panel-inner">
+            <div class="auth-mobile-brand">
+              <div class="auth-mark auth-mark-sm">
+                <svg viewBox="0 0 48 48" width="36" height="36" fill="none" aria-hidden="true">
+                  <rect width="48" height="48" rx="12" fill="#1a6fb5" />
+                  <path d="M14 34V14h5.2v7.6H28.8V14H34v20h-5.2V26.2H19.2V34H14z" fill="#fff" />
+                </svg>
+              </div>
+              <span>Hạ tầng Vĩnh Linh</span>
+            </div>
 
-        <form id="auth-form" autocomplete="on">
-          <div class="field" id="field-name" hidden>
-            <label for="auth-name">Họ và tên</label>
-            <input id="auth-name" type="text" name="name" autocomplete="name" placeholder="Nguyễn Văn A" />
+            <h2 id="auth-heading" class="auth-heading">Chào mừng trở lại</h2>
+            <p id="auth-subheading" class="auth-subheading">Đăng nhập để tiếp tục quản lý trạm</p>
+
+            <div class="auth-tabs" role="tablist">
+              <button type="button" class="auth-tab active" data-auth-mode="login" role="tab" aria-selected="true">
+                Đăng nhập
+              </button>
+              <button type="button" class="auth-tab" data-auth-mode="register" role="tab" aria-selected="false">
+                Đăng ký
+              </button>
+            </div>
+
+            <form id="auth-form" class="auth-form" autocomplete="on">
+              <div class="field" id="field-name" hidden>
+                <label for="auth-name">Họ và tên</label>
+                <input id="auth-name" type="text" name="name" autocomplete="name" placeholder="Nguyễn Văn A" />
+              </div>
+              <div class="field">
+                <label for="auth-email">Email công việc</label>
+                <input
+                  id="auth-email"
+                  type="email"
+                  name="email"
+                  required
+                  autocomplete="username"
+                  placeholder="ban@congty.vn"
+                />
+              </div>
+              <div class="field">
+                <label for="auth-password">Mật khẩu</label>
+                <div class="input-with-action">
+                  <input
+                    id="auth-password"
+                    type="password"
+                    name="password"
+                    required
+                    minlength="6"
+                    autocomplete="current-password"
+                    placeholder="Ít nhất 6 ký tự"
+                  />
+                  <button type="button" class="input-action" id="toggle-password" aria-label="Hiện mật khẩu">
+                    Hiện
+                  </button>
+                </div>
+              </div>
+              <div class="field" id="field-password2" hidden>
+                <label for="auth-password2">Xác nhận mật khẩu</label>
+                <input
+                  id="auth-password2"
+                  type="password"
+                  name="password2"
+                  minlength="6"
+                  autocomplete="new-password"
+                  placeholder="Nhập lại mật khẩu"
+                />
+              </div>
+
+              <div id="auth-error" class="auth-error" hidden role="alert"></div>
+
+              <button type="submit" class="btn auth-submit" id="auth-submit">
+                <span class="auth-submit-label">Đăng nhập</span>
+                <span class="auth-submit-spinner" hidden aria-hidden="true"></span>
+              </button>
+            </form>
+
+            <p id="auth-switch" class="auth-switch">
+              Chưa có tài khoản?
+              <button type="button" class="auth-switch-btn" data-auth-mode="register">Đăng ký ngay</button>
+            </p>
+            <p class="auth-footer">Dành cho nhân sự vận hành hạ tầng · Đồng bộ với G Hunter</p>
           </div>
-          <div class="field">
-            <label for="auth-email">Email</label>
-            <input id="auth-email" type="email" name="email" required autocomplete="username" placeholder="email@example.com" />
-          </div>
-          <div class="field">
-            <label for="auth-password">Mật khẩu</label>
-            <input id="auth-password" type="password" name="password" required minlength="6" autocomplete="current-password" placeholder="Ít nhất 6 ký tự" />
-          </div>
-          <p id="auth-error" class="auth-error" hidden></p>
-          <button type="submit" class="btn auth-submit" id="auth-submit">Đăng nhập</button>
-        </form>
+        </section>
       </div>
     </div>
 

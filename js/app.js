@@ -155,16 +155,43 @@ function editorLine(profile) {
 function showAuth(show) {
   $('#auth-screen').hidden = !show;
   $('#app-shell').hidden = show;
+  document.body.classList.toggle('is-auth', show);
 }
 
 function setAuthMode(mode) {
   state.authMode = mode;
-  $$('.auth-tab').forEach((t) => t.classList.toggle('active', t.dataset.authMode === mode));
-  $('#field-name').hidden = mode !== 'register';
-  $('#auth-name').required = mode === 'register';
-  $('#auth-submit').textContent = mode === 'register' ? 'Đăng ký' : 'Đăng nhập';
-  $('#auth-password').autocomplete = mode === 'register' ? 'new-password' : 'current-password';
+  const isRegister = mode === 'register';
+  $$('.auth-tab').forEach((t) => {
+    const on = t.dataset.authMode === mode;
+    t.classList.toggle('active', on);
+    t.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  $('#field-name').hidden = !isRegister;
+  $('#field-password2').hidden = !isRegister;
+  $('#auth-name').required = isRegister;
+  $('#auth-password2').required = isRegister;
+  $('#auth-heading').textContent = isRegister ? 'Tạo tài khoản' : 'Chào mừng trở lại';
+  $('#auth-subheading').textContent = isRegister
+    ? 'Đăng ký để theo dõi và cập nhật dữ liệu trạm'
+    : 'Đăng nhập để tiếp tục quản lý trạm';
+  $('.auth-submit-label').textContent = isRegister ? 'Tạo tài khoản' : 'Đăng nhập';
+  $('#auth-password').autocomplete = isRegister ? 'new-password' : 'current-password';
+  const switchEl = $('#auth-switch');
+  if (isRegister) {
+    switchEl.innerHTML =
+      'Đã có tài khoản? <button type="button" class="auth-switch-btn" data-auth-mode="login">Đăng nhập</button>';
+  } else {
+    switchEl.innerHTML =
+      'Chưa có tài khoản? <button type="button" class="auth-switch-btn" data-auth-mode="register">Đăng ký ngay</button>';
+  }
   $('#auth-error').hidden = true;
+}
+
+function setAuthLoading(loading) {
+  const btn = $('#auth-submit');
+  btn.disabled = loading;
+  $('.auth-submit-spinner').hidden = !loading;
+  $('.auth-submit-label').style.opacity = loading ? '0.85' : '1';
 }
 
 function showAuthError(msg) {
@@ -200,16 +227,22 @@ async function handleAuthSubmit(e) {
   e.preventDefault();
   const email = $('#auth-email').value.trim();
   const password = $('#auth-password').value;
+  const password2 = $('#auth-password2').value;
   const name = $('#auth-name').value.trim();
-  const btn = $('#auth-submit');
-  btn.disabled = true;
   showAuthError('');
+  if (state.authMode === 'register') {
+    if (!name) {
+      showAuthError('Vui lòng nhập họ và tên.');
+      return;
+    }
+    if (password !== password2) {
+      showAuthError('Mật khẩu xác nhận không khớp.');
+      return;
+    }
+  }
+  setAuthLoading(true);
   try {
     if (state.authMode === 'register') {
-      if (!name) {
-        showAuthError('Vui lòng nhập họ và tên.');
-        return;
-      }
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(cred.user, { displayName: name });
       await set(ref(db, `users/${cred.user.uid}`), {
@@ -223,9 +256,9 @@ async function handleAuthSubmit(e) {
       toast('Đã đăng nhập');
     }
   } catch (err) {
-    showAuthError(authErrorMessage(err.code) + (err.code ? '' : ` (${err.message || err})`));
+    showAuthError(authErrorMessage(err.code) || err.message || 'Không thể xác thực.');
   } finally {
-    btn.disabled = false;
+    setAuthLoading(false);
   }
 }
 
@@ -543,6 +576,17 @@ function toast(msg) {
 function bindEvents() {
   $$('.auth-tab').forEach((tab) => {
     tab.addEventListener('click', () => setAuthMode(tab.dataset.authMode));
+  });
+  $('#auth-switch').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-auth-mode]');
+    if (btn) setAuthMode(btn.dataset.authMode);
+  });
+  $('#toggle-password').addEventListener('click', () => {
+    const input = $('#auth-password');
+    const show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    $('#toggle-password').textContent = show ? 'Ẩn' : 'Hiện';
+    $('#toggle-password').setAttribute('aria-label', show ? 'Ẩn mật khẩu' : 'Hiện mật khẩu');
   });
   $('#auth-form').addEventListener('submit', handleAuthSubmit);
   $('#logout-btn').addEventListener('click', handleLogout);
