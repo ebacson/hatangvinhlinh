@@ -689,9 +689,50 @@ function startAuth() {
   });
 }
 
+function showUpdateBanner(worker) {
+  const banner = $('#update-banner');
+  if (!banner) return;
+  banner.hidden = false;
+  const btn = $('#update-reload');
+  btn.onclick = () => {
+    worker.postMessage({ type: 'SKIP_WAITING' });
+  };
+}
+
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
-  navigator.serviceWorker.register(`${BASE}/sw.js`, { scope: `${BASE}/` }).catch(() => {});
+  navigator.serviceWorker
+    .register(`${BASE}/sw.js`, { scope: `${BASE}/` })
+    .then((reg) => {
+      // Đã có bản waiting sẵn (mở lại app sau khi deploy)
+      if (reg.waiting) showUpdateBanner(reg.waiting);
+
+      reg.addEventListener('updatefound', () => {
+        const installing = reg.installing;
+        if (!installing) return;
+        installing.addEventListener('statechange', () => {
+          if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+            showUpdateBanner(installing);
+          }
+        });
+      });
+
+      // Kiểm tra bản mới khi mở app / khi quay lại tab
+      const check = () => reg.update().catch(() => {});
+      check();
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') check();
+      });
+      setInterval(check, 5 * 60_000);
+    })
+    .catch(() => {});
+
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refreshing) return;
+    refreshing = true;
+    window.location.reload();
+  });
 }
 
 bindEvents();

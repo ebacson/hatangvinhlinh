@@ -1121,6 +1121,33 @@ main {
   box-shadow: var(--shadow);
 }
 
+.update-banner {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(var(--nav-h) + 12px + env(safe-area-inset-bottom, 0px));
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #102536;
+  color: #fff;
+  font-size: 0.92rem;
+  font-weight: 600;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+}
+
+.update-banner-btn {
+  flex-shrink: 0;
+  padding: 8px 14px;
+  font-size: 0.88rem;
+  border-radius: 10px;
+  box-shadow: none;
+}
+
 [hidden] {
   display: none !important;
 }
