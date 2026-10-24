@@ -13,7 +13,7 @@ import {
   set,
   serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-database.js';
-import { BASE, APP_VERSION, firebaseConfig, ALERT_TABS, LONG_RUN_MS, LOW_FUEL_PERCENT } from './config.js?v=16';
+import { BASE, APP_VERSION, firebaseConfig, ALERT_TABS, LONG_RUN_MS, LOW_FUEL_PERCENT } from './config.js?v=17';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -21,7 +21,7 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=16';
+} from './forecast.js?v=17';
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -582,10 +582,13 @@ function renderDetail() {
   editPanel.hidden = !isEdit;
   historyPanel.hidden = !isHistory;
   sheet.setAttribute('aria-label', isEdit ? 'Cập nhật trạm' : 'Chi tiết trạm');
-  $('#detail-title').textContent = isEdit
-    ? `Cập nhật · ${s.profile.maTram || s.stationKey}`
-    : `Chi tiết · ${s.profile.maTram || s.stationKey}`;
-  $('#detail-subtitle').textContent = s.profile.tenTram || '';
+  const badge = $('#detail-mode-badge');
+  if (badge) {
+    badge.textContent = isEdit ? 'Cập nhật' : 'Chi tiết';
+    badge.classList.toggle('is-history', isHistory);
+  }
+  $('#detail-title').textContent = s.profile.maTram || s.stationKey;
+  $('#detail-subtitle').textContent = s.profile.tenTram || '—';
 
   if (isEdit) {
     if (!sheet.dataset.bound || sheet.dataset.key !== s.stationKey || sheet.dataset.mode !== 'edit') {

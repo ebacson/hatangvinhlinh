@@ -1,7 +1,7 @@
 /** GitHub Pages base path (repo name). Local file:// / custom domain: set to ''. */
 export const BASE = '/hatangvinhlinh';
 /** Bump when shipping UI so Android PWA cache can be verified. */
-export const APP_VERSION = '16';
+export const APP_VERSION = '17';
 
 export const firebaseConfig = {
   apiKey: 'AIzaSyB-4uSMb-r5Bww3Te664x2VswGx82Ewnf8',

@@ -18,7 +18,7 @@
       href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700&family=Sora:wght@600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="css/app.css?v=16" />
+    <link rel="stylesheet" href="css/app.css?v=17" />
   </head>
   <body>
     <!-- Auth -->
@@ -165,56 +165,93 @@
 
       <div id="sheet-backdrop" hidden></div>
       <aside id="detail-sheet" hidden aria-label="Chi tiết trạm">
+        <div class="sheet-handle" aria-hidden="true"></div>
         <div class="sheet-header">
-          <div style="flex: 1">
+          <div class="sheet-heading">
+            <span id="detail-mode-badge" class="sheet-mode-badge">Cập nhật</span>
             <h2 id="detail-title">Trạm</h2>
-            <p id="detail-subtitle" class="muted"></p>
+            <p id="detail-subtitle" class="sheet-sub"></p>
           </div>
-          <button type="button" class="btn-text" id="detail-close">Đóng</button>
+          <button type="button" class="sheet-close" id="detail-close" aria-label="Đóng">✕</button>
         </div>
 
-        <div id="detail-edit-panel" hidden>
-          <div class="field">
-            <label for="f-generator">Tên máy nổ</label>
-            <input id="f-generator" type="text" />
-          </div>
-          <div class="field">
-            <label for="f-fuel-type">Loại nhiên liệu</label>
-            <select id="f-fuel-type">
-              <option value="">—</option>
-              <option value="gasoline">Xăng</option>
-              <option value="diesel">Dầu</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="f-rate">Định mức (lít/giờ)</label>
-            <input id="f-rate" type="number" min="0" step="0.1" inputmode="decimal" />
-          </div>
-          <div class="field">
-            <label for="f-capacity">Dung tích bình (lít)</label>
-            <input id="f-capacity" type="number" min="0" step="0.1" inputmode="decimal" />
-          </div>
-          <div class="field">
-            <label for="f-level">Cập nhật mức nhiên liệu (%)</label>
-            <input id="f-level" type="number" min="0" max="100" step="0.1" inputmode="decimal" />
-          </div>
+        <div id="detail-edit-panel" class="sheet-panel" hidden>
+          <section class="sheet-block">
+            <h3 class="sheet-block-title">Thông số máy</h3>
+            <div class="field-grid">
+              <div class="field">
+                <label for="f-generator">Tên máy nổ</label>
+                <input id="f-generator" type="text" placeholder="VD: Máy 1" />
+              </div>
+              <div class="field">
+                <label for="f-fuel-type">Loại nhiên liệu</label>
+                <select id="f-fuel-type">
+                  <option value="">—</option>
+                  <option value="gasoline">Xăng</option>
+                  <option value="diesel">Dầu</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="f-rate">Định mức (lít/giờ)</label>
+                <input id="f-rate" type="number" min="0" step="0.1" inputmode="decimal" placeholder="0.0" />
+              </div>
+              <div class="field">
+                <label for="f-capacity">Dung tích bình (lít)</label>
+                <input id="f-capacity" type="number" min="0" step="0.1" inputmode="decimal" placeholder="0.0" />
+              </div>
+              <div class="field field-span">
+                <label for="f-level">Mức nhiên liệu hiện tại (%)</label>
+                <input id="f-level" type="number" min="0" max="100" step="0.1" inputmode="decimal" placeholder="0–100" />
+              </div>
+            </div>
+          </section>
 
-          <div class="kv"><span>Dự báo nhiên liệu</span><strong id="detail-forecast">--</strong></div>
-          <div class="kv"><span>Thời gian đã chạy</span><strong id="detail-since">--</strong></div>
-          <div class="kv"><span>Tổng thời gian chạy</span><strong id="detail-total">--</strong></div>
-          <div class="kv"><span>Cập nhật bởi</span><strong id="detail-editor">--</strong></div>
-          <div class="kv"><span>Thời gian cập nhật</span><strong id="detail-edited-at">--</strong></div>
+          <section class="sheet-block">
+            <h3 class="sheet-block-title">Tình trạng</h3>
+            <div class="stat-grid">
+              <div class="stat-tile stat-accent">
+                <span class="stat-l">Dự báo nhiên liệu</span>
+                <strong id="detail-forecast" class="stat-v">--</strong>
+              </div>
+              <div class="stat-tile">
+                <span class="stat-l">Đã chạy</span>
+                <strong id="detail-since" class="stat-v">--</strong>
+              </div>
+              <div class="stat-tile">
+                <span class="stat-l">Tổng chạy</span>
+                <strong id="detail-total" class="stat-v">--</strong>
+              </div>
+            </div>
+            <p class="sheet-meta">
+              Cập nhật bởi <strong id="detail-editor">--</strong>
+              · <span id="detail-edited-at">--</span>
+            </p>
+          </section>
 
           <div class="sheet-actions">
-            <button type="button" class="btn" id="detail-save">Lưu</button>
+            <button type="button" class="btn sheet-save" id="detail-save">Lưu thay đổi</button>
           </div>
         </div>
 
-        <div id="detail-history-panel" hidden>
-          <section class="run-history" aria-label="Lịch sử chạy máy">
-            <h3 class="run-history-title">Lịch sử chạy máy</h3>
-            <div class="kv"><span>Thời gian đã chạy</span><strong id="history-since">--</strong></div>
-            <div class="kv"><span>Tổng thời gian chạy</span><strong id="history-total">--</strong></div>
+        <div id="detail-history-panel" class="sheet-panel" hidden>
+          <section class="sheet-block">
+            <div class="stat-grid stat-grid-2">
+              <div class="stat-tile">
+                <span class="stat-l">Đã chạy</span>
+                <strong id="history-since" class="stat-v">--</strong>
+              </div>
+              <div class="stat-tile">
+                <span class="stat-l">Tổng chạy</span>
+                <strong id="history-total" class="stat-v">--</strong>
+              </div>
+            </div>
+          </section>
+
+          <section class="sheet-block run-history" aria-label="Lịch sử chạy máy">
+            <div class="sheet-block-head">
+              <h3 class="sheet-block-title">Lịch sử chạy máy</h3>
+              <span class="sheet-block-hint">Mới nhất trước</span>
+            </div>
             <div id="detail-run-history" class="run-history-list">
               <p class="muted run-history-empty">Đang tải...</p>
             </div>
@@ -229,6 +266,6 @@
       <button type="button" id="update-reload" class="btn update-banner-btn">Cập nhật ngay</button>
     </div>
 
-    <script type="module" src="js/app.js?v=16"></script>
+    <script type="module" src="js/app.js?v=17"></script>
   </body>
 </html>
