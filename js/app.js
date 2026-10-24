@@ -13,7 +13,7 @@ import {
   set,
   serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-database.js';
-import { BASE, APP_VERSION, firebaseConfig, ALERT_TABS, LONG_RUN_MS, LOW_FUEL_PERCENT } from './config.js?v=17';
+import { BASE, APP_VERSION, firebaseConfig, ALERT_TABS, LONG_RUN_MS, LOW_FUEL_PERCENT } from './config.js?v=18';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -21,7 +21,7 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=17';
+} from './forecast.js?v=18';
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -304,6 +304,7 @@ function renderStations() {
     .map((s, index) => {
       const code = s.profile.maTram || s.stationKey;
       const name = s.profile.tenTram || 'Chưa có tên site';
+      const generator = (s.profile.generatorName || '').trim();
       const addr = s.profile.diaChi || 'Chưa có địa chỉ';
       const predicted = stationForecast(s);
       const fuelClass = fuelLevelClass(predicted);
@@ -333,6 +334,11 @@ function renderStations() {
           </div>
         </div>
         <h3 class="station-name">${escapeHtml(name)}</h3>
+        <p class="station-generator">${
+          generator
+            ? `Máy nổ: <strong>${escapeHtml(generator)}</strong>`
+            : '<span class="muted">Máy nổ: chưa đặt tên</span>'
+        }</p>
         <p class="station-addr">
           <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M12 2c-3.9 0-7 3.1-7 7 0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"/></svg>
           ${escapeHtml(addr)}

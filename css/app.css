@@ -686,6 +686,18 @@ main {
   color: #243447;
 }
 
+.station-generator {
+  margin: 0 0 6px;
+  font-size: 0.78rem;
+  color: #4a6278;
+  line-height: 1.35;
+}
+
+.station-generator strong {
+  font-weight: 700;
+  color: #1f3a52;
+}
+
 .station-addr {
   display: flex;
   align-items: flex-start;
