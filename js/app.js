@@ -98,9 +98,13 @@ function parseStation(key, raw) {
   };
 }
 
+function generatorStations() {
+  return state.stations.filter((s) => !!(s.deviceStatus && s.deviceStatus.MAY_NO_EAS));
+}
+
 function filteredStations() {
   const q = state.query.trim().toLowerCase();
-  let list = state.stations;
+  let list = generatorStations();
   if (q) {
     list = list.filter((s) => {
       const code = (s.profile.maTram || s.stationKey).toLowerCase();
