@@ -1,4 +1,4 @@
-const CACHE = 'htvl-v11';
+const CACHE = 'htvl-v12';
 const BASE = '/hatangvinhlinh';
 const ASSETS = [
   `${BASE}/`,
@@ -13,9 +13,8 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting())
-  );
+  // Không skipWaiting tự động — giữ banner đến khi người dùng nhấn Cập nhật
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)));
 });
 
 self.addEventListener('activate', (event) => {
