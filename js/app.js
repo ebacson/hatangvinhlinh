@@ -13,7 +13,7 @@ import {
   set,
   serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-database.js';
-import { BASE, APP_VERSION, firebaseConfig, ALERT_TABS, LONG_RUN_MS, LOW_FUEL_PERCENT } from './config.js?v=19';
+import { BASE, APP_VERSION, firebaseConfig, ALERT_TABS, LONG_RUN_MS, LOW_FUEL_PERCENT } from './config.js?v=20';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -21,7 +21,14 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=19';
+} from './forecast.js?v=20';
+import {
+  extractMayNoRuns,
+  computeStats,
+  formatPeriodLabel,
+  fuelTypeLabel,
+  formatLiters,
+} from './stats.js?v=20';
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -43,6 +50,9 @@ const state = {
   runHistory: [],
   runHistoryLoading: false,
   runHistoryKey: null,
+  statsPeriodType: 'month',
+  statsPeriodKey: '',
+  statsStationKey: '',
 };
 
 let unsubRunHistory = null;
@@ -104,6 +114,7 @@ function parseStation(key, raw) {
     mayNoLastAlertType: mayNo.lastAlertType || null,
     mayNoScAtMillis: toNum(mayNo.scAtMillis),
     deviceStatus: raw.deviceStatus || {},
+    runs: extractMayNoRuns(raw.events || {}),
   };
 }
 
@@ -249,7 +260,183 @@ function render() {
 
   if (state.tab === 'stations') renderStations();
   if (state.tab === 'alerts') renderAlerts();
+  if (state.tab === 'stats') renderStats();
   renderDetail();
+}
+
+function syncStatsFiltersUi(periodOptions) {
+  const typeSel = $('#stats-period-type');
+  const keySel = $('#stats-period-key');
+  const keyWrap = $('#stats-period-wrap');
+  const stSel = $('#stats-station');
+  if (!typeSel || !keySel || !stSel) return;
+
+  typeSel.value = state.statsPeriodType;
+  const showKey = state.statsPeriodType !== 'all';
+  keyWrap.hidden = !showKey;
+
+  if (showKey) {
+    const opts = periodOptions.length ? periodOptions : [];
+    if (!state.statsPeriodKey || !opts.includes(state.statsPeriodKey)) {
+      state.statsPeriodKey = opts[0] || '';
+    }
+    keySel.innerHTML = opts.length
+      ? opts
+          .map(
+            (k) =>
+              `<option value="${escapeAttr(k)}">${escapeHtml(
+                formatPeriodLabel(k, state.statsPeriodType)
+              )}</option>`
+          )
+          .join('')
+      : `<option value="">—</option>`;
+    keySel.value = state.statsPeriodKey;
+  }
+
+  const stations = generatorStations().sort((a, b) =>
+    (a.profile.maTram || a.stationKey).localeCompare(b.profile.maTram || b.stationKey, 'vi')
+  );
+  const prev = state.statsStationKey;
+  stSel.innerHTML =
+    `<option value="">Tất cả trạm</option>` +
+    stations
+      .map((s) => {
+        const label = s.profile.maTram || s.stationKey;
+        const gen = (s.profile.generatorName || '').trim();
+        const text = gen ? `${label} · ${gen}` : label;
+        return `<option value="${escapeAttr(s.stationKey)}">${escapeHtml(text)}</option>`;
+      })
+      .join('');
+  stSel.value = stations.some((s) => s.stationKey === prev) ? prev : '';
+  if (stSel.value !== prev) state.statsStationKey = stSel.value;
+}
+
+function renderStats() {
+  const root = $('#stats-root');
+  if (!root) return;
+
+  const stations = generatorStations().map((s) => ({
+    ...s,
+    _forecastPercent: stationForecast(s),
+  }));
+
+  // Prefill period options before compute (need all runs)
+  const preview = computeStats(stations, {
+    periodType: state.statsPeriodType,
+    periodKey: state.statsPeriodKey,
+    stationKey: '',
+  });
+  syncStatsFiltersUi(preview.periodOptions);
+
+  const data = computeStats(stations, {
+    periodType: state.statsPeriodType,
+    periodKey: state.statsPeriodType === 'all' ? '' : state.statsPeriodKey,
+    stationKey: state.statsStationKey,
+  });
+
+  const periodText =
+    state.statsPeriodType === 'all'
+      ? 'Tất cả thời gian'
+      : formatPeriodLabel(data.periodKey, data.periodType);
+
+  const fuelTypes = [
+    ['gasoline', 'Xăng'],
+    ['diesel', 'Dầu'],
+    ['unknown', 'Chưa chọn loại'],
+  ];
+
+  root.innerHTML = `
+    <div class="stats-summary">
+      <article class="stats-kpi">
+        <span class="stats-kpi-l">Thời gian chạy</span>
+        <strong class="stats-kpi-v">${escapeHtml(formatMinutes(data.totalMinutes))}</strong>
+        <span class="stats-kpi-h">${escapeHtml(periodText)}</span>
+      </article>
+      <article class="stats-kpi">
+        <span class="stats-kpi-l">Số lần chạy</span>
+        <strong class="stats-kpi-v">${data.runCount}</strong>
+        <span class="stats-kpi-h">${data.stationCount} trạm</span>
+      </article>
+      <article class="stats-kpi">
+        <span class="stats-kpi-l">NL tiêu thụ (ước tính)</span>
+        <strong class="stats-kpi-v">${escapeHtml(formatLiters(data.totalFuelUsed))}</strong>
+        <span class="stats-kpi-h">theo định mức trạm</span>
+      </article>
+    </div>
+
+    <section class="stats-card">
+      <h3 class="stats-card-title">Thời gian chạy theo trạm</h3>
+      ${
+        data.byStation.length
+          ? `<div class="stats-table-wrap"><table class="stats-table">
+        <thead><tr><th>Trạm</th><th>Máy</th><th>Lần</th><th>Thời gian</th><th>NL dùng</th></tr></thead>
+        <tbody>
+          ${data.byStation
+            .map(
+              (r) => `<tr>
+              <td><strong>${escapeHtml(r.maTram)}</strong><div class="muted tiny">${escapeHtml(
+                r.tenTram || ''
+              )}</div></td>
+              <td>${escapeHtml(r.generatorName || '—')}</td>
+              <td>${r.runs}</td>
+              <td>${escapeHtml(formatMinutes(r.minutes))}</td>
+              <td>${escapeHtml(r.fuelKnown ? formatLiters(r.fuelUsed) : '--')}</td>
+            </tr>`
+            )
+            .join('')}
+        </tbody>
+      </table></div>`
+          : `<p class="muted stats-empty">Không có lần chạy trong kỳ này.</p>`
+      }
+    </section>
+
+    <section class="stats-card">
+      <h3 class="stats-card-title">Nhiên liệu theo loại</h3>
+      <div class="stats-fuel-grid">
+        ${fuelTypes
+          .map(([key, label]) => {
+            const b = data.fuelByType[key];
+            if (!b.stations && key === 'unknown') return '';
+            return `<article class="stats-fuel-tile">
+              <h4>${escapeHtml(label)}</h4>
+              <p><span>Tiêu thụ kỳ</span><strong>${escapeHtml(
+                b.consumedKnown ? formatLiters(b.consumedL) : '--'
+              )}</strong></p>
+              <p><span>Còn lại (hiện tại)</span><strong>${escapeHtml(
+                b.remainingKnown ? formatLiters(b.remainingL) : '--'
+              )}</strong></p>
+              <p class="muted tiny">${b.stations} trạm</p>
+            </article>`;
+          })
+          .join('')}
+      </div>
+      <p class="muted tiny stats-note">Còn lại = dự báo % × dung tích bình. Tiêu thụ = giờ chạy KP × định mức lít/giờ.</p>
+    </section>
+
+    <section class="stats-card">
+      <h3 class="stats-card-title">Lịch sử chạy máy</h3>
+      ${
+        data.history.length
+          ? `<div class="stats-history">
+          ${data.history
+            .map(
+              (r) => `<article class="stats-hist-row">
+              <div class="stats-hist-top">
+                <strong>${escapeHtml(r.maTram)}</strong>
+                <span>${escapeHtml(formatMinutes(r.minutes))}</span>
+              </div>
+              <div class="muted tiny">${escapeHtml(r.start)} → ${escapeHtml(r.end)}</div>
+              <div class="muted tiny">${escapeHtml(r.generatorName || 'Máy chưa đặt tên')} · ${escapeHtml(
+                fuelTypeLabel(r.fuelType)
+              )}</div>
+            </article>`
+            )
+            .join('')}
+        </div>`
+          : `<p class="muted stats-empty">Chưa có lịch sử KP máy nổ trong kỳ.</p>`
+      }
+    </section>
+  `;
 }
 
 function fuelLevelClass(predicted) {
@@ -785,6 +972,20 @@ function bindEvents() {
   $('#station-search').addEventListener('input', (e) => {
     state.query = e.target.value;
     renderStations();
+  });
+
+  $('#stats-period-type')?.addEventListener('change', (e) => {
+    state.statsPeriodType = e.target.value;
+    state.statsPeriodKey = '';
+    renderStats();
+  });
+  $('#stats-period-key')?.addEventListener('change', (e) => {
+    state.statsPeriodKey = e.target.value;
+    renderStats();
+  });
+  $('#stats-station')?.addEventListener('change', (e) => {
+    state.statsStationKey = e.target.value;
+    renderStats();
   });
 
   $('#stations-list').addEventListener('click', (e) => {

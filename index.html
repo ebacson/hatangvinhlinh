@@ -18,7 +18,7 @@
       href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700&family=Sora:wght@600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="css/app.css?v=19" />
+    <link rel="stylesheet" href="css/app.css?v=20" />
   </head>
   <body>
     <!-- Auth -->
@@ -150,12 +150,41 @@
           <div id="alerts-empty" class="empty" hidden>Không có cảnh báo đang active.</div>
           <div id="alerts-list"></div>
         </section>
+
+        <section class="panel" data-panel="stats" hidden>
+          <div class="stats-toolbar">
+            <label class="stats-field">
+              <span>Kỳ</span>
+              <select id="stats-period-type">
+                <option value="month">Theo tháng</option>
+                <option value="quarter">Theo quý</option>
+                <option value="year">Theo năm</option>
+                <option value="all">Tất cả</option>
+              </select>
+            </label>
+            <label class="stats-field" id="stats-period-wrap">
+              <span>Chọn kỳ</span>
+              <select id="stats-period-key"></select>
+            </label>
+            <label class="stats-field">
+              <span>Trạm</span>
+              <select id="stats-station">
+                <option value="">Tất cả trạm</option>
+              </select>
+            </label>
+          </div>
+          <div id="stats-root" class="stats-root"></div>
+        </section>
       </main>
 
       <nav class="bottom-nav" aria-label="Điều hướng chính">
         <button type="button" class="nav-btn active" data-tab="stations">
           <span class="icon" aria-hidden="true">📡</span>
           Trạm
+        </button>
+        <button type="button" class="nav-btn" data-tab="stats">
+          <span class="icon" aria-hidden="true">📊</span>
+          Thống kê
         </button>
         <button type="button" class="nav-btn" data-tab="alerts">
           <span class="icon" aria-hidden="true">🔔</span>
@@ -266,6 +295,6 @@
       <button type="button" id="update-reload" class="btn update-banner-btn">Cập nhật ngay</button>
     </div>
 
-    <script type="module" src="js/app.js?v=19"></script>
+    <script type="module" src="js/app.js?v=20"></script>
   </body>
 </html>
