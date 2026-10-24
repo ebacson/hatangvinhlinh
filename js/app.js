@@ -13,7 +13,7 @@ import {
   set,
   serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-database.js';
-import { BASE, APP_VERSION, firebaseConfig, ALERT_TABS, LONG_RUN_MS, LOW_FUEL_PERCENT } from './config.js?v=18';
+import { BASE, APP_VERSION, firebaseConfig, ALERT_TABS, LONG_RUN_MS, LOW_FUEL_PERCENT } from './config.js?v=19';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -21,7 +21,7 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=18';
+} from './forecast.js?v=19';
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -309,7 +309,6 @@ function renderStations() {
       const predicted = stationForecast(s);
       const fuelClass = fuelLevelClass(predicted);
       const fuelLabel = predicted == null ? '--' : formatPercent(predicted);
-      const fuelWidth = predicted == null ? 0 : Math.round(predicted);
       const since = formatMinutes(s.stats.runMinutesSinceRefuel);
       const total = formatMinutes(s.stats.totalRunMinutes);
       const lastMin = s.stats.lastRunMinutes;
@@ -317,52 +316,45 @@ function renderStations() {
         lastMin == null
           ? '--'
           : `${formatMinutes(lastMin)}${s.stats.lastKpAt ? ` · ${formatMillis(s.stats.lastKpAt)}` : ''}`;
-      const edited = editorLine(s.profile);
+      const genLabel = generator || 'chưa đặt tên';
       const active = s.mayNoLastAlertType === 'SC';
       return `<article class="station-card ${fuelClass}${active ? ' is-sc' : ''}" data-key="${escapeAttr(
         s.stationKey
       )}" style="--i:${index}">
         <div class="station-accent" aria-hidden="true"></div>
-        <div class="station-top">
-          <div class="station-id">
-            <span class="station-code">${escapeHtml(code)}</span>
-            ${active ? '<span class="badge badge-sc">Đang SC</span>' : ''}
+        <div class="station-row-main">
+          <div class="station-main">
+            <div class="station-id">
+              <span class="station-code">${escapeHtml(code)}</span>
+              ${active ? '<span class="badge badge-sc">SC</span>' : ''}
+            </div>
+            <p class="station-name">${escapeHtml(name)}</p>
+            <p class="station-meta-line">
+              <span class="station-generator">Máy: <strong>${escapeHtml(genLabel)}</strong></span>
+              <span class="dot-sep" aria-hidden="true">·</span>
+              <span class="station-addr">${escapeHtml(addr)}</span>
+            </p>
+            <p class="station-stats-line">
+              Đã chạy ${escapeHtml(since)}
+              <span class="dot-sep" aria-hidden="true">·</span>
+              Tổng ${escapeHtml(total)}
+              <span class="dot-sep" aria-hidden="true">·</span>
+              Gần nhất ${escapeHtml(last)}
+            </p>
           </div>
-          <div class="station-fuel ${fuelClass}" title="Dự báo nhiên liệu">
-            <span class="fuel-value">${escapeHtml(fuelLabel)}</span>
-            <span class="fuel-caption">nhiên liệu</span>
+          <div class="station-side">
+            <div class="station-fuel ${fuelClass}" title="Dự báo nhiên liệu">
+              <span class="fuel-value">${escapeHtml(fuelLabel)}</span>
+            </div>
+            <div class="station-actions">
+              <button type="button" class="btn-outline station-action-btn" data-action="edit" data-key="${escapeAttr(
+                s.stationKey
+              )}">Sửa</button>
+              <button type="button" class="btn station-action-btn" data-action="history" data-key="${escapeAttr(
+                s.stationKey
+              )}">Chi tiết</button>
+            </div>
           </div>
-        </div>
-        <h3 class="station-name">${escapeHtml(name)}</h3>
-        <p class="station-generator">${
-          generator
-            ? `Máy nổ: <strong>${escapeHtml(generator)}</strong>`
-            : '<span class="muted">Máy nổ: chưa đặt tên</span>'
-        }</p>
-        <p class="station-addr">
-          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M12 2c-3.9 0-7 3.1-7 7 0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"/></svg>
-          ${escapeHtml(addr)}
-        </p>
-        <div class="fuel-track" aria-hidden="true">
-          <div class="fuel-fill" style="width:${fuelWidth}%"></div>
-        </div>
-        <div class="station-metrics">
-          <div class="metric"><span class="metric-l">Đã chạy</span><span class="metric-v">${escapeHtml(since)}</span></div>
-          <div class="metric"><span class="metric-l">Tổng</span><span class="metric-v">${escapeHtml(total)}</span></div>
-          <div class="metric metric-wide"><span class="metric-l">Lần gần nhất</span><span class="metric-v">${escapeHtml(last)}</span></div>
-        </div>
-        ${
-          edited
-            ? `<p class="station-edited">${escapeHtml(edited)}</p>`
-            : '<p class="station-edited muted">Chưa có lần cập nhật thủ công</p>'
-        }
-        <div class="station-actions">
-          <button type="button" class="btn-outline station-action-btn" data-action="edit" data-key="${escapeAttr(
-            s.stationKey
-          )}">Cập nhật</button>
-          <button type="button" class="btn station-action-btn" data-action="history" data-key="${escapeAttr(
-            s.stationKey
-          )}">Chi tiết</button>
         </div>
       </article>`;
     })
