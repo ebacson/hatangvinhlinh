@@ -278,14 +278,10 @@ function renderStations() {
     empty.hidden = false;
     if (state.query.trim()) {
       empty.innerHTML = `
-        <div class="empty-illu" aria-hidden="true">🔍</div>
         <p class="empty-title">Không tìm thấy trạm</p>
         <p class="empty-desc">Thử mã hoặc tên khác.</p>`;
     } else {
-      empty.innerHTML = `
-        <div class="empty-illu" aria-hidden="true">📡</div>
-        <p class="empty-title">Chưa có trạm nào</p>
-        <p class="empty-desc">Dữ liệu trạm sẽ hiện khi Android G Hunter đồng bộ SMS lên cloud.</p>`;
+      empty.innerHTML = `<p class="empty-title">Đang tải...</p>`;
     }
     return;
   }
