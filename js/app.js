@@ -739,6 +739,7 @@ async function saveStation() {
     sheet.dataset.bound = '';
     toast('Đã lưu');
     state.selectedKey = null;
+    state.sheetMode = null;
     render();
   } catch (e) {
     toast('Lưu thất bại: ' + (e.message || e));
@@ -863,6 +864,8 @@ function startAuth() {
     } else {
       state.displayName = '';
       state.selectedKey = null;
+      state.sheetMode = null;
+      stopRunHistoryListener();
     }
     render();
   });
