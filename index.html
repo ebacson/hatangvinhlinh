@@ -122,15 +122,28 @@
 
       <main>
         <section class="panel" data-panel="stations">
-          <input
-            id="station-search"
-            class="search"
-            type="search"
-            placeholder="Tìm theo tên/mã trạm…"
-            autocomplete="off"
-          />
-          <div id="stations-empty" class="empty" hidden>Chưa có trạm nào.</div>
-          <div id="stations-list"></div>
+          <div class="stations-toolbar">
+            <label class="search-wrap" for="station-search">
+              <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="2" />
+                <path d="M16.5 16.5L21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              </svg>
+              <input
+                id="station-search"
+                class="search"
+                type="search"
+                placeholder="Tìm theo tên hoặc mã trạm…"
+                autocomplete="off"
+              />
+            </label>
+            <div id="stations-summary" class="stations-summary" hidden></div>
+          </div>
+          <div id="stations-empty" class="empty empty-stations" hidden>
+            <div class="empty-illu" aria-hidden="true">📡</div>
+            <p class="empty-title">Chưa có trạm nào</p>
+            <p class="empty-desc">Dữ liệu trạm sẽ hiện khi Android G Hunter đồng bộ SMS lên cloud.</p>
+          </div>
+          <div id="stations-list" class="stations-list"></div>
         </section>
 
         <section class="panel" data-panel="alerts" hidden>

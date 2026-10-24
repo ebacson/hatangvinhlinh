@@ -234,47 +234,109 @@ function render() {
   renderDetail();
 }
 
+function fuelLevelClass(predicted) {
+  if (predicted == null) return 'fuel-unknown';
+  if (predicted < 10) return 'fuel-critical';
+  if (predicted < 30) return 'fuel-low';
+  if (predicted < 60) return 'fuel-mid';
+  return 'fuel-ok';
+}
+
+function renderStationsSummary(list) {
+  const el = $('#stations-summary');
+  if (!el) return;
+  if (!list.length && !state.query.trim()) {
+    el.hidden = true;
+    el.innerHTML = '';
+    return;
+  }
+  const sc = list.filter((s) => s.mayNoLastAlertType === 'SC').length;
+  const low = list.filter((s) => {
+    const p = stationForecast(s);
+    return p != null && p < 30;
+  }).length;
+  el.hidden = false;
+  el.innerHTML = `
+    <div class="stat-pill"><span class="stat-n">${list.length}</span><span class="stat-l">trạm</span></div>
+    <div class="stat-pill ${sc ? 'is-warn' : ''}"><span class="stat-n">${sc}</span><span class="stat-l">đang SC</span></div>
+    <div class="stat-pill ${low ? 'is-fuel' : ''}"><span class="stat-n">${low}</span><span class="stat-l">NL thấp</span></div>
+  `;
+}
+
 function renderStations() {
   const list = filteredStations();
   const root = $('#stations-list');
   const empty = $('#stations-empty');
+  renderStationsSummary(list);
+
   if (!list.length) {
     root.innerHTML = '';
     empty.hidden = false;
+    if (state.query.trim()) {
+      empty.innerHTML = `
+        <div class="empty-illu" aria-hidden="true">🔍</div>
+        <p class="empty-title">Không tìm thấy trạm</p>
+        <p class="empty-desc">Thử mã hoặc tên khác.</p>`;
+    } else {
+      empty.innerHTML = `
+        <div class="empty-illu" aria-hidden="true">📡</div>
+        <p class="empty-title">Chưa có trạm nào</p>
+        <p class="empty-desc">Dữ liệu trạm sẽ hiện khi Android G Hunter đồng bộ SMS lên cloud.</p>`;
+    }
     return;
   }
   empty.hidden = true;
   root.innerHTML = list
-    .map((s) => {
+    .map((s, index) => {
       const code = s.profile.maTram || s.stationKey;
-      const name = s.profile.tenTram || '';
-      const title = name ? `${escapeHtml(code)} · ${escapeHtml(name)}` : escapeHtml(code);
+      const name = s.profile.tenTram || 'Chưa có tên site';
+      const addr = s.profile.diaChi || 'Chưa có địa chỉ';
       const predicted = stationForecast(s);
-      const forecast =
-        predicted == null
-          ? 'Chưa đủ dữ liệu để dự báo'
-          : `Dự báo nhiên liệu: ${formatPercent(predicted)}`;
-      const since = s.stats.runMinutesSinceRefuel;
-      const total = s.stats.totalRunMinutes;
-      const runParts = [];
-      if (since != null) runParts.push(`Đã chạy: ${formatMinutes(since)}`);
-      if (total != null) runParts.push(`Tổng: ${formatMinutes(total)}`);
-      const runLine = runParts.length ? runParts.join(' · ') : 'Tổng: --';
+      const fuelClass = fuelLevelClass(predicted);
+      const fuelLabel = predicted == null ? '--' : formatPercent(predicted);
+      const fuelWidth = predicted == null ? 0 : Math.round(predicted);
+      const since = formatMinutes(s.stats.runMinutesSinceRefuel);
+      const total = formatMinutes(s.stats.totalRunMinutes);
+      const lastMin = s.stats.lastRunMinutes;
       const last =
-        s.stats.lastRunMinutes == null
-          ? 'Lần chạy gần nhất: --'
-          : `Lần chạy gần nhất: ${formatMinutes(s.stats.lastRunMinutes)}${
-              s.stats.lastKpAt ? ` · ${formatMillis(s.stats.lastKpAt)}` : ''
-            }`;
+        lastMin == null
+          ? '--'
+          : `${formatMinutes(lastMin)}${s.stats.lastKpAt ? ` · ${formatMillis(s.stats.lastKpAt)}` : ''}`;
       const edited = editorLine(s.profile);
-      const active = s.mayNoLastAlertType === 'SC' ? '<span class="badge badge-warn">Đang SC</span>' : '';
-      return `<article class="card station-card" data-key="${escapeAttr(s.stationKey)}" role="button" tabindex="0">
-        <div class="card-title-row"><h3>${title}</h3>${active}</div>
-        <p class="muted">${escapeHtml(s.profile.diaChi || '')}</p>
-        <p class="forecast">${escapeHtml(forecast)}</p>
-        <p class="muted small">${escapeHtml(runLine)}</p>
-        <p class="muted small">${escapeHtml(last)}</p>
-        ${edited ? `<p class="muted small editor-line">${escapeHtml(edited)}</p>` : ''}
+      const active = s.mayNoLastAlertType === 'SC';
+      return `<article class="station-card ${fuelClass}${active ? ' is-sc' : ''}" data-key="${escapeAttr(
+        s.stationKey
+      )}" role="button" tabindex="0" style="--i:${index}">
+        <div class="station-accent" aria-hidden="true"></div>
+        <div class="station-top">
+          <div class="station-id">
+            <span class="station-code">${escapeHtml(code)}</span>
+            ${active ? '<span class="badge badge-sc">Đang SC</span>' : ''}
+          </div>
+          <div class="station-fuel ${fuelClass}" title="Dự báo nhiên liệu">
+            <span class="fuel-value">${escapeHtml(fuelLabel)}</span>
+            <span class="fuel-caption">nhiên liệu</span>
+          </div>
+        </div>
+        <h3 class="station-name">${escapeHtml(name)}</h3>
+        <p class="station-addr">
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M12 2c-3.9 0-7 3.1-7 7 0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"/></svg>
+          ${escapeHtml(addr)}
+        </p>
+        <div class="fuel-track" aria-hidden="true">
+          <div class="fuel-fill" style="width:${fuelWidth}%"></div>
+        </div>
+        <div class="station-metrics">
+          <div class="metric"><span class="metric-l">Đã chạy</span><span class="metric-v">${escapeHtml(since)}</span></div>
+          <div class="metric"><span class="metric-l">Tổng</span><span class="metric-v">${escapeHtml(total)}</span></div>
+          <div class="metric metric-wide"><span class="metric-l">Lần gần nhất</span><span class="metric-v">${escapeHtml(last)}</span></div>
+        </div>
+        ${
+          edited
+            ? `<p class="station-edited">${escapeHtml(edited)}</p>`
+            : '<p class="station-edited muted">Chưa có lần cập nhật thủ công</p>'
+        }
+        <span class="station-chevron" aria-hidden="true">›</span>
       </article>`;
     })
     .join('');
