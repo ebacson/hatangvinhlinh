@@ -58,23 +58,10 @@
               <span>Hạ tầng Vĩnh Linh</span>
             </div>
 
-            <h2 id="auth-heading" class="auth-heading">Chào mừng trở lại</h2>
-            <p id="auth-subheading" class="auth-subheading">Đăng nhập để tiếp tục quản lý trạm</p>
-
-            <div class="auth-tabs" role="tablist">
-              <button type="button" class="auth-tab active" data-auth-mode="login" role="tab" aria-selected="true">
-                Đăng nhập
-              </button>
-              <button type="button" class="auth-tab" data-auth-mode="register" role="tab" aria-selected="false">
-                Đăng ký
-              </button>
-            </div>
+            <h2 class="auth-heading">Chào mừng trở lại</h2>
+            <p class="auth-subheading">Đăng nhập để tiếp tục quản lý trạm</p>
 
             <form id="auth-form" class="auth-form" autocomplete="on">
-              <div class="field" id="field-name" hidden>
-                <label for="auth-name">Họ và tên</label>
-                <input id="auth-name" type="text" name="name" autocomplete="name" placeholder="Nguyễn Văn A" />
-              </div>
               <div class="field">
                 <label for="auth-email">Email công việc</label>
                 <input
@@ -96,23 +83,12 @@
                     required
                     minlength="6"
                     autocomplete="current-password"
-                    placeholder="Ít nhất 6 ký tự"
+                    placeholder="Nhập mật khẩu"
                   />
                   <button type="button" class="input-action" id="toggle-password" aria-label="Hiện mật khẩu">
                     Hiện
                   </button>
                 </div>
-              </div>
-              <div class="field" id="field-password2" hidden>
-                <label for="auth-password2">Xác nhận mật khẩu</label>
-                <input
-                  id="auth-password2"
-                  type="password"
-                  name="password2"
-                  minlength="6"
-                  autocomplete="new-password"
-                  placeholder="Nhập lại mật khẩu"
-                />
               </div>
 
               <div id="auth-error" class="auth-error" hidden role="alert"></div>
@@ -123,11 +99,7 @@
               </button>
             </form>
 
-            <p id="auth-switch" class="auth-switch">
-              Chưa có tài khoản?
-              <button type="button" class="auth-switch-btn" data-auth-mode="register">Đăng ký ngay</button>
-            </p>
-            <p class="auth-footer">Dành cho nhân sự vận hành hạ tầng · Đồng bộ với G Hunter</p>
+            <p class="auth-footer">Tài khoản do quản trị viên cấp · Đồng bộ với G Hunter</p>
           </div>
         </section>
       </div>

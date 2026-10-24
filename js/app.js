@@ -2,10 +2,8 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.0.2/firebas
 import {
   getAuth,
   onAuthStateChanged,
-  createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
-  updateProfile,
 } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js';
 import {
   getDatabase,
@@ -39,7 +37,6 @@ const state = {
   alertTab: 0,
   selectedKey: null,
   tick: Date.now(),
-  authMode: 'login',
   stationsBound: false,
 };
 
@@ -158,35 +155,6 @@ function showAuth(show) {
   document.body.classList.toggle('is-auth', show);
 }
 
-function setAuthMode(mode) {
-  state.authMode = mode;
-  const isRegister = mode === 'register';
-  $$('.auth-tab').forEach((t) => {
-    const on = t.dataset.authMode === mode;
-    t.classList.toggle('active', on);
-    t.setAttribute('aria-selected', on ? 'true' : 'false');
-  });
-  $('#field-name').hidden = !isRegister;
-  $('#field-password2').hidden = !isRegister;
-  $('#auth-name').required = isRegister;
-  $('#auth-password2').required = isRegister;
-  $('#auth-heading').textContent = isRegister ? 'Tạo tài khoản' : 'Chào mừng trở lại';
-  $('#auth-subheading').textContent = isRegister
-    ? 'Đăng ký để theo dõi và cập nhật dữ liệu trạm'
-    : 'Đăng nhập để tiếp tục quản lý trạm';
-  $('.auth-submit-label').textContent = isRegister ? 'Tạo tài khoản' : 'Đăng nhập';
-  $('#auth-password').autocomplete = isRegister ? 'new-password' : 'current-password';
-  const switchEl = $('#auth-switch');
-  if (isRegister) {
-    switchEl.innerHTML =
-      'Đã có tài khoản? <button type="button" class="auth-switch-btn" data-auth-mode="login">Đăng nhập</button>';
-  } else {
-    switchEl.innerHTML =
-      'Chưa có tài khoản? <button type="button" class="auth-switch-btn" data-auth-mode="register">Đăng ký ngay</button>';
-  }
-  $('#auth-error').hidden = true;
-}
-
 function setAuthLoading(loading) {
   const btn = $('#auth-submit');
   btn.disabled = loading;
@@ -202,12 +170,8 @@ function showAuthError(msg) {
 
 function authErrorMessage(code) {
   switch (code) {
-    case 'auth/email-already-in-use':
-      return 'Email đã được đăng ký.';
     case 'auth/invalid-email':
       return 'Email không hợp lệ.';
-    case 'auth/weak-password':
-      return 'Mật khẩu cần ít nhất 6 ký tự.';
     case 'auth/user-not-found':
     case 'auth/wrong-password':
     case 'auth/invalid-credential':
@@ -218,8 +182,10 @@ function authErrorMessage(code) {
       return 'Lỗi mạng. Kiểm tra kết nối.';
     case 'auth/operation-not-allowed':
       return 'Chưa bật đăng nhập Email/Password trên Firebase Console.';
+    case 'auth/user-disabled':
+      return 'Tài khoản đã bị vô hiệu hóa.';
     default:
-      return 'Không thể xác thực. Thử lại.';
+      return 'Không thể đăng nhập. Thử lại.';
   }
 }
 
@@ -227,34 +193,11 @@ async function handleAuthSubmit(e) {
   e.preventDefault();
   const email = $('#auth-email').value.trim();
   const password = $('#auth-password').value;
-  const password2 = $('#auth-password2').value;
-  const name = $('#auth-name').value.trim();
   showAuthError('');
-  if (state.authMode === 'register') {
-    if (!name) {
-      showAuthError('Vui lòng nhập họ và tên.');
-      return;
-    }
-    if (password !== password2) {
-      showAuthError('Mật khẩu xác nhận không khớp.');
-      return;
-    }
-  }
   setAuthLoading(true);
   try {
-    if (state.authMode === 'register') {
-      const cred = await createUserWithEmailAndPassword(auth, email, password);
-      await updateProfile(cred.user, { displayName: name });
-      await set(ref(db, `users/${cred.user.uid}`), {
-        displayName: name,
-        email,
-        createdAt: serverTimestamp(),
-      });
-      toast('Đăng ký thành công');
-    } else {
-      await signInWithEmailAndPassword(auth, email, password);
-      toast('Đã đăng nhập');
-    }
+    await signInWithEmailAndPassword(auth, email, password);
+    toast('Đã đăng nhập');
   } catch (err) {
     showAuthError(authErrorMessage(err.code) || err.message || 'Không thể xác thực.');
   } finally {
@@ -574,13 +517,6 @@ function toast(msg) {
 /* ---------- Wire up ---------- */
 
 function bindEvents() {
-  $$('.auth-tab').forEach((tab) => {
-    tab.addEventListener('click', () => setAuthMode(tab.dataset.authMode));
-  });
-  $('#auth-switch').addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-auth-mode]');
-    if (btn) setAuthMode(btn.dataset.authMode);
-  });
   $('#toggle-password').addEventListener('click', () => {
     const input = $('#auth-password');
     const show = input.type === 'password';
@@ -693,7 +629,6 @@ function registerSW() {
 }
 
 bindEvents();
-setAuthMode('login');
 startAuth();
 registerSW();
 render();
