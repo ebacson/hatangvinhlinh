@@ -26,7 +26,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=28';
+} from './config.js?v=29';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -34,14 +34,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=28';
+} from './forecast.js?v=29';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=28';
+} from './stats.js?v=29';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=29';
 
 const app = initializeApp(firebaseConfig);
 // Persist session (IndexedDB → localStorage) so PWA/standalone không mất đăng nhập mỗi lần mở.
@@ -418,37 +419,154 @@ function syncStatsFiltersUi(periodOptions) {
   if (stSel.value !== prev) state.statsStationKey = stSel.value;
 }
 
-function renderStats() {
-  const root = $('#stats-root');
-  if (!root) return;
-  if (!canViewStats()) {
-    root.innerHTML = `<p class="muted stats-empty">Chỉ admin hoặc root được xem thống kê.</p>`;
-    return;
-  }
-
+function buildStatsData() {
   const stations = generatorStations().map((s) => ({
     ...s,
     _forecastPercent: stationForecast(s),
   }));
-
-  // Prefill period options before compute (need all runs)
   const preview = computeStats(stations, {
     periodType: state.statsPeriodType,
     periodKey: state.statsPeriodKey,
     stationKey: '',
   });
   syncStatsFiltersUi(preview.periodOptions);
-
-  const data = computeStats(stations, {
+  return computeStats(stations, {
     periodType: state.statsPeriodType,
     periodKey: state.statsPeriodType === 'all' ? '' : state.statsPeriodKey,
     stationKey: state.statsStationKey,
   });
+}
 
-  const periodText =
-    state.statsPeriodType === 'all'
-      ? 'Tất cả thời gian'
-      : formatPeriodLabel(data.periodKey, data.periodType);
+function statsPeriodText(data) {
+  return state.statsPeriodType === 'all'
+    ? 'Tất cả thời gian'
+    : formatPeriodLabel(data.periodKey, data.periodType);
+}
+
+function exportStatsExcel() {
+  if (!canViewStats()) {
+    toast('Chỉ admin hoặc root được xuất thống kê');
+    return;
+  }
+  const data = buildStatsData();
+  const periodText = statsPeriodText(data);
+  const stationLabel = state.statsStationKey
+    ? (() => {
+        const s = state.stations.find((x) => x.stationKey === state.statsStationKey);
+        return s?.profile?.maTram || state.statsStationKey;
+      })()
+    : 'Tat-ca-tram';
+
+  const summaryRows = [
+    ['Thống kê máy nổ'],
+    ['Kỳ', periodText],
+    ['Trạm', state.statsStationKey ? stationLabel : 'Tất cả trạm'],
+    ['Xuất lúc', new Date().toLocaleString('vi-VN')],
+    [],
+    ['Chỉ số', 'Giá trị'],
+    ['Thời gian chạy (phút)', data.totalMinutes],
+    ['Thời gian chạy', formatMinutes(data.totalMinutes)],
+    ['Số lần chạy', data.runCount],
+    ['Số trạm trong phạm vi', data.stationCount],
+    ['NL tiêu thụ ước tính (L)', data.totalFuelUsed != null ? Number(data.totalFuelUsed.toFixed(2)) : ''],
+  ];
+
+  const byStationRows = [
+    ['Mã trạm', 'Tên trạm', 'Máy', 'Loại NL', 'Số lần', 'Phút chạy', 'Thời gian', 'NL dùng (L)'],
+    ...data.byStation.map((r) => [
+      r.maTram,
+      r.tenTram || '',
+      r.generatorName || '',
+      fuelTypeLabel(r.fuelType),
+      r.runs,
+      r.minutes,
+      formatMinutes(r.minutes),
+      r.fuelKnown ? Number(r.fuelUsed.toFixed(2)) : '',
+    ]),
+  ];
+
+  const fuelRows = [
+    ['Loại nhiên liệu', 'Số trạm', 'Tiêu thụ kỳ (L)', 'Còn lại hiện tại (L)'],
+    ...[
+      ['gasoline', 'Xăng'],
+      ['diesel', 'Dầu'],
+      ['unknown', 'Chưa chọn loại'],
+    ].map(([key, label]) => {
+      const b = data.fuelByType[key];
+      return [
+        label,
+        b.stations,
+        b.consumedKnown ? Number(b.consumedL.toFixed(2)) : '',
+        b.remainingKnown ? Number(b.remainingL.toFixed(2)) : '',
+      ];
+    }),
+  ];
+
+  const historyRows = [
+    [
+      'Mã trạm',
+      'Tên trạm',
+      'Máy',
+      'Loại NL',
+      'Bắt đầu',
+      'Kết thúc',
+      'Phút chạy',
+      'Thời gian',
+      'NL ước tính (L)',
+    ],
+    ...(data.runs || []).map((r) => {
+      let fuel = '';
+      if (r.fuelRate != null && r.fuelRate >= 0) {
+        fuel = Number(((Math.max(0, r.minutes || 0) / 60) * r.fuelRate).toFixed(2));
+      }
+      return [
+        r.maTram,
+        r.tenTram || '',
+        r.generatorName || '',
+        fuelTypeLabel(r.fuelType),
+        r.start,
+        r.end,
+        r.minutes,
+        formatMinutes(r.minutes),
+        fuel,
+      ];
+    }),
+  ];
+
+  const fileBase = [
+    'thong-ke-may-no',
+    safeFilePart(periodText),
+    safeFilePart(stationLabel),
+  ]
+    .filter(Boolean)
+    .join('_');
+
+  downloadExcelWorkbook(
+    [
+      { name: 'Tom tat', rows: summaryRows },
+      { name: 'Theo tram', rows: byStationRows },
+      { name: 'Nhien lieu', rows: fuelRows },
+      { name: 'Lich su chay', rows: historyRows },
+    ],
+    fileBase
+  );
+  toast('Đã tải file Excel');
+}
+
+function renderStats() {
+  const root = $('#stats-root');
+  if (!root) return;
+  const exportBtn = $('#stats-export-excel');
+  if (!canViewStats()) {
+    root.innerHTML = `<p class="muted stats-empty">Chỉ admin hoặc root được xem thống kê.</p>`;
+    if (exportBtn) exportBtn.hidden = true;
+    return;
+  }
+  if (exportBtn) exportBtn.hidden = false;
+
+  const data = buildStatsData();
+
+  const periodText = statsPeriodText(data);
 
   const fuelTypes = [
     ['gasoline', 'Xăng'],
@@ -1229,6 +1347,9 @@ function bindEvents() {
   $('#stats-station')?.addEventListener('change', (e) => {
     state.statsStationKey = e.target.value;
     renderStats();
+  });
+  $('#stats-export-excel')?.addEventListener('click', () => {
+    exportStatsExcel();
   });
 
   $('#stations-list').addEventListener('click', (e) => {

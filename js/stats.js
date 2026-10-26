@@ -244,7 +244,8 @@ export function computeStats(stations, filters) {
     }
   }
 
-  const history = [...filteredRuns].sort((a, b) => b.at - a.at).slice(0, 80);
+  const runs = [...filteredRuns].sort((a, b) => b.at - a.at);
+  const history = runs.slice(0, 80);
 
   return {
     periodType,
@@ -256,6 +257,8 @@ export function computeStats(stations, filters) {
     byStation,
     fuelByType,
     history,
+    /** Toàn bộ lần chạy trong kỳ (xuất Excel). */
+    runs,
     stationCount: scopedStations.length,
   };
 }

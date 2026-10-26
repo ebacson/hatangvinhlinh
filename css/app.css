@@ -1674,8 +1674,26 @@ main {
   flex: 1 1 auto;
 }
 
+.stats-toolbar-bottom {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  min-width: 0;
+}
+
 .stats-field-station {
-  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.stats-export-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  padding: 8px 12px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  height: fit-content;
+  margin-bottom: 0;
 }
 
 .stats-field select {

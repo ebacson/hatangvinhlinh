@@ -18,7 +18,7 @@
       href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700&family=Sora:wght@600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="css/app.css?v=28" />
+    <link rel="stylesheet" href="css/app.css?v=29" />
   </head>
   <body>
     <div id="boot-screen" class="boot-screen" role="status" aria-live="polite">
@@ -176,12 +176,17 @@
                 <select id="stats-period-key"></select>
               </label>
             </div>
-            <label class="stats-field stats-field-station">
-              <span>Trạm</span>
-              <select id="stats-station">
-                <option value="">Tất cả trạm</option>
-              </select>
-            </label>
+            <div class="stats-toolbar-bottom">
+              <label class="stats-field stats-field-station">
+                <span>Trạm</span>
+                <select id="stats-station">
+                  <option value="">Tất cả trạm</option>
+                </select>
+              </label>
+              <button type="button" id="stats-export-excel" class="btn btn-outline stats-export-btn">
+                Xuất Excel
+              </button>
+            </div>
           </div>
           <div id="stats-root" class="stats-root"></div>
         </section>
@@ -345,6 +350,6 @@
       <button type="button" id="update-reload" class="btn update-banner-btn">Cập nhật ngay</button>
     </div>
 
-    <script type="module" src="js/app.js?v=28"></script>
+    <script type="module" src="js/app.js?v=29"></script>
   </body>
 </html>
