@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=30';
+} from './config.js?v=31';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=30';
+} from './forecast.js?v=31';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=30';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=30';
+} from './stats.js?v=31';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=31';
 
 const app = initializeApp(firebaseConfig);
 // Persist session (IndexedDB → localStorage) so PWA/standalone không mất đăng nhập mỗi lần mở.
@@ -973,7 +973,6 @@ function renderSettings() {
   const emailEl = $('#settings-email');
   const nameEl = $('#settings-name');
   const roleEl = $('#settings-role');
-  const noteEl = $('#settings-dismiss-note');
   const avatarEl = $('#settings-avatar');
   if (!emailEl) return;
 
@@ -988,13 +987,6 @@ function renderSettings() {
   roleEl.classList.toggle('is-root', role === 'root');
   roleEl.classList.toggle('is-admin', role === 'admin');
   roleEl.classList.toggle('is-user', !role);
-
-  const privileged = isPrivilegedUser();
-  noteEl.textContent = privileged
-    ? 'Được xem thống kê · xóa cảnh báo · sửa/xóa lịch sử'
-    : 'Chỉ xem trạm/cảnh báo. Thống kê & lịch sử dành cho admin/root';
-  noteEl.classList.toggle('is-ok', privileged);
-  noteEl.classList.toggle('is-no', !privileged);
 
   if (avatarEl) {
     const initial = (name || email || '?').trim().charAt(0).toUpperCase() || '?';
