@@ -86,6 +86,18 @@ body {
   color: #1f7a42;
 }
 
+.settings-root .kv {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid #e8eef4;
+  font-size: 0.92rem;
+}
+.settings-root .kv strong {
+  text-align: right;
+  word-break: break-word;
+}
 .settings-root {
   display: flex;
   flex-direction: column;
