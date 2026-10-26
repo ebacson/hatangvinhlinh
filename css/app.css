@@ -1535,6 +1535,18 @@ main {
   letter-spacing: 0.02em;
 }
 
+.run-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.run-row-actions .btn-text {
+  padding: 2px 8px;
+  font-size: 0.72rem;
+}
+
 @media (max-width: 380px) {
   .field-grid {
     grid-template-columns: 1fr;

@@ -23,7 +23,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=26';
+} from './config.js?v=27';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -31,14 +31,14 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=26';
+} from './forecast.js?v=27';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=26';
+} from './stats.js?v=27';
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -89,10 +89,23 @@ function isRootUser(user = state.user) {
   return normalizeEmail(user?.email) === normalizeEmail(ROOT_EMAIL);
 }
 
-function canDismissAlerts() {
+/** Root hoặc admin: xóa cảnh báo, xem thống kê, xóa/sửa lịch sử chạy. */
+function isPrivilegedUser() {
   if (!state.user) return false;
   if (isRootUser()) return true;
   return !!state.admins[state.user.uid];
+}
+
+function canDismissAlerts() {
+  return isPrivilegedUser();
+}
+
+function canViewStats() {
+  return isPrivilegedUser();
+}
+
+function canManageRunHistory() {
+  return isPrivilegedUser();
 }
 
 function roleLabel() {
@@ -300,8 +313,25 @@ function render() {
     ver.hidden = false;
     ver.textContent = `bản ${APP_VERSION}`;
   }
+  if (state.tab === 'stats' && !canViewStats()) {
+    state.tab = 'stations';
+  }
+  if (
+    state.sheetMode === 'history' &&
+    state.selectedKey &&
+    !canManageRunHistory()
+  ) {
+    state.selectedKey = null;
+    state.sheetMode = null;
+    stopRunHistoryListener();
+  }
+
   $$('.nav-btn').forEach((btn) => {
-    btn.classList.toggle('active', btn.dataset.tab === state.tab);
+    const tab = btn.dataset.tab;
+    if (tab === 'stats') {
+      btn.hidden = !canViewStats();
+    }
+    btn.classList.toggle('active', tab === state.tab);
   });
   $$('.panel').forEach((p) => {
     p.hidden = p.dataset.panel !== state.tab;
@@ -309,7 +339,7 @@ function render() {
 
   if (state.tab === 'stations') renderStations();
   if (state.tab === 'alerts') renderAlerts();
-  if (state.tab === 'stats') renderStats();
+  if (state.tab === 'stats' && canViewStats()) renderStats();
   if (state.tab === 'settings') renderSettings();
   renderDetail();
 }
@@ -364,6 +394,10 @@ function syncStatsFiltersUi(periodOptions) {
 function renderStats() {
   const root = $('#stats-root');
   if (!root) return;
+  if (!canViewStats()) {
+    root.innerHTML = `<p class="muted stats-empty">Chỉ admin hoặc root được xem thống kê.</p>`;
+    return;
+  }
 
   const stations = generatorStations().map((s) => ({
     ...s,
@@ -587,9 +621,13 @@ function renderStations() {
               <button type="button" class="btn-outline station-action-btn" data-action="edit" data-key="${escapeAttr(
                 s.stationKey
               )}">Cập nhật</button>
-              <button type="button" class="btn station-action-btn" data-action="history" data-key="${escapeAttr(
-                s.stationKey
-              )}">Chi tiết</button>
+              ${
+                canManageRunHistory()
+                  ? `<button type="button" class="btn station-action-btn" data-action="history" data-key="${escapeAttr(
+                      s.stationKey
+                    )}">Chi tiết</button>`
+                  : ''
+              }
             </div>
           </div>
         </div>
@@ -680,10 +718,12 @@ function renderSettings() {
   roleEl.classList.toggle('is-admin', role === 'admin');
   roleEl.classList.toggle('is-user', !role);
 
-  const canDismiss = canDismissAlerts();
-  noteEl.textContent = canDismiss ? 'Được xóa cảnh báo' : 'Không được xóa cảnh báo';
-  noteEl.classList.toggle('is-ok', canDismiss);
-  noteEl.classList.toggle('is-no', !canDismiss);
+  const privileged = isPrivilegedUser();
+  noteEl.textContent = privileged
+    ? 'Được xem thống kê · xóa cảnh báo · sửa/xóa lịch sử'
+    : 'Chỉ xem trạm/cảnh báo. Thống kê & lịch sử dành cho admin/root';
+  noteEl.classList.toggle('is-ok', privileged);
+  noteEl.classList.toggle('is-no', !privileged);
 
   if (avatarEl) {
     const initial = (name || email || '?').trim().charAt(0).toUpperCase() || '?';
@@ -781,17 +821,30 @@ function renderRunHistory() {
     el.innerHTML = `<p class="muted run-history-empty">Chưa có lần chạy nào được ghi.</p>`;
     return;
   }
+  const canManage = canManageRunHistory();
   el.innerHTML = state.runHistory
     .map((r) => {
       const dur =
         r.minutes == null ? '--' : r.active ? `~${formatMinutes(r.minutes)}` : formatMinutes(r.minutes);
       const range = `${escapeHtml(r.start)} → ${escapeHtml(r.end)}`;
+      const actions =
+        canManage && !r.active
+          ? `<div class="run-row-actions">
+              <button type="button" class="btn-text run-edit-btn" data-edit-run="${escapeAttr(
+                r.id
+              )}" data-minutes="${escapeAttr(String(r.minutes ?? ''))}">Sửa</button>
+              <button type="button" class="btn-text danger run-del-btn" data-del-run="${escapeAttr(
+                r.id
+              )}">Xóa</button>
+            </div>`
+          : '';
       return `<article class="run-row ${r.active ? 'is-active' : ''}">
         <div class="run-row-top">
           <div class="run-row-range">${range}</div>
           <div class="run-row-dur">${escapeHtml(dur)}</div>
         </div>
         <div class="run-row-meta">${escapeHtml(r.label)}</div>
+        ${actions}
       </article>`;
     })
     .join('');
@@ -837,6 +890,10 @@ function bindRunHistory(stationKey) {
 }
 
 function openStationSheet(stationKey, mode) {
+  if (mode === 'history' && !canManageRunHistory()) {
+    toast('Chỉ admin hoặc root được xem/sửa lịch sử chạy máy');
+    return;
+  }
   state.selectedKey = stationKey;
   state.sheetMode = mode;
   const sheet = $('#detail-sheet');
@@ -846,6 +903,48 @@ function openStationSheet(stationKey, mode) {
   }
   if (mode !== 'history') stopRunHistoryListener();
   render();
+}
+
+async function deleteRunHistoryEvent(eventId) {
+  if (!canManageRunHistory() || !state.selectedKey || !eventId || eventId === 'active-sc') {
+    toast('Không thể xóa mục này');
+    return;
+  }
+  if (!confirm('Xóa lần chạy này khỏi lịch sử?\nKhông tự chỉnh lại tổng giờ chạy đã cộng.')) return;
+  try {
+    await remove(ref(db, `stations/${state.selectedKey}/events/${eventId}`));
+    toast('Đã xóa lịch sử chạy');
+  } catch (e) {
+    toast('Xóa thất bại: ' + (e.message || e));
+  }
+}
+
+async function editRunHistoryEvent(eventId, currentMinutes) {
+  if (!canManageRunHistory() || !state.selectedKey || !eventId || eventId === 'active-sc') {
+    toast('Không thể sửa mục này');
+    return;
+  }
+  const raw = prompt('Thời gian chạy (phút):', String(currentMinutes ?? ''));
+  if (raw == null) return;
+  const minutes = Number(String(raw).trim().replace(',', '.'));
+  if (!Number.isFinite(minutes) || minutes < 0) {
+    toast('Số phút không hợp lệ');
+    return;
+  }
+  const rounded = Math.round(minutes);
+  try {
+    await update(ref(db, `stations/${state.selectedKey}/events/${eventId}`), {
+      durationMinutesEffective: rounded,
+      durationMinutesFromRange: rounded,
+      durationToken: `${rounded}p`,
+      editedAt: serverTimestamp(),
+      editedBy: currentUserLabel(),
+      editedByUid: state.user.uid,
+    });
+    toast('Đã cập nhật thời gian chạy');
+  } catch (e) {
+    toast('Sửa thất bại: ' + (e.message || e));
+  }
 }
 
 function renderDetail() {
@@ -940,7 +1039,7 @@ function escapeAttr(s) {
 async function dismissAlert(stationKey, deviceType) {
   if (!state.user) return;
   if (!canDismissAlerts()) {
-    toast('Chỉ root hoặc admin được xóa cảnh báo');
+    toast('Chỉ admin hoặc root được xóa cảnh báo');
     return;
   }
   const label =
@@ -1076,7 +1175,12 @@ function bindEvents() {
 
   $$('.nav-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
-      state.tab = btn.dataset.tab;
+      const tab = btn.dataset.tab;
+      if (tab === 'stats' && !canViewStats()) {
+        toast('Chỉ admin hoặc root được xem thống kê');
+        return;
+      }
+      state.tab = tab;
       render();
     });
   });
@@ -1108,6 +1212,18 @@ function bindEvents() {
     const action = btn.dataset.action;
     if (action === 'edit') openStationSheet(key, 'edit');
     else if (action === 'history') openStationSheet(key, 'history');
+  });
+
+  $('#detail-run-history')?.addEventListener('click', (e) => {
+    const del = e.target.closest('[data-del-run]');
+    if (del) {
+      deleteRunHistoryEvent(del.dataset.delRun);
+      return;
+    }
+    const edit = e.target.closest('[data-edit-run]');
+    if (edit) {
+      editRunHistoryEvent(edit.dataset.editRun, edit.dataset.minutes);
+    }
   });
 
   $('#alert-tabs').addEventListener('click', (e) => {
