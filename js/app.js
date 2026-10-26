@@ -23,7 +23,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=22';
+} from './config.js?v=23';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -31,14 +31,14 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=22';
+} from './forecast.js?v=23';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=22';
+} from './stats.js?v=23';
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -300,8 +300,6 @@ function render() {
     ver.hidden = false;
     ver.textContent = `bản ${APP_VERSION}`;
   }
-  renderAdminRoles();
-
   $$('.nav-btn').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.tab === state.tab);
   });
@@ -312,6 +310,7 @@ function render() {
   if (state.tab === 'stations') renderStations();
   if (state.tab === 'alerts') renderAlerts();
   if (state.tab === 'stats') renderStats();
+  if (state.tab === 'settings') renderSettings();
   renderDetail();
 }
 
@@ -661,11 +660,29 @@ function renderAlerts() {
     .join('');
 }
 
+function renderSettings() {
+  const emailEl = $('#settings-email');
+  const nameEl = $('#settings-name');
+  const roleEl = $('#settings-role');
+  const noteEl = $('#settings-dismiss-note');
+  if (!emailEl) return;
+
+  emailEl.textContent = state.user?.email || '--';
+  nameEl.textContent = currentUserLabel();
+  const role = roleLabel();
+  roleEl.textContent = role === 'root' ? 'Root' : role === 'admin' ? 'Admin' : 'User';
+  noteEl.textContent = canDismissAlerts()
+    ? 'Bạn được phép xóa cảnh báo trên web.'
+    : 'Bạn không được xóa cảnh báo. Liên hệ root để cấp admin.';
+
+  renderAdminRoles();
+}
+
 function renderAdminRoles() {
   const box = $('#admin-roles');
   const list = $('#admin-list');
   if (!box || !list) return;
-  const show = state.tab === 'alerts' && isRootUser();
+  const show = isRootUser();
   box.hidden = !show;
   if (!show) return;
 
@@ -694,9 +711,7 @@ function renderAdminRoles() {
       (r) => `<div class="admin-row">
         <div>
           <strong>${escapeHtml(r.email)}</strong>
-          <div class="muted tiny">${escapeHtml(r.meta)}${
-            r.kind === 'pending' ? '' : ''
-          }</div>
+          <div class="muted tiny">${escapeHtml(r.meta)}</div>
         </div>
         <button type="button" class="btn-text danger" data-revoke-admin="${escapeAttr(r.key)}" data-revoke-kind="${escapeAttr(
           r.kind

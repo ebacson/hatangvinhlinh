@@ -18,7 +18,7 @@
       href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700&family=Sora:wght@600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="css/app.css?v=22" />
+    <link rel="stylesheet" href="css/app.css?v=23" />
   </head>
   <body>
     <!-- Auth -->
@@ -147,23 +147,6 @@
         </section>
 
         <section class="panel" data-panel="alerts" hidden>
-          <div id="admin-roles" class="admin-roles" hidden>
-            <div class="admin-roles-head">
-              <h3>Quyền xóa cảnh báo</h3>
-              <p class="muted tiny">Root cấp admin — chỉ root và admin được xóa cảnh báo.</p>
-            </div>
-            <form id="admin-grant-form" class="admin-grant-form">
-              <input
-                id="admin-email"
-                type="email"
-                required
-                placeholder="email@congty.vn"
-                autocomplete="off"
-              />
-              <button type="submit" class="btn admin-grant-btn">Cấp admin</button>
-            </form>
-            <div id="admin-list" class="admin-list"></div>
-          </div>
           <div id="alert-tabs" class="chips" role="tablist"></div>
           <div id="alerts-empty" class="empty" hidden>Không có cảnh báo đang active.</div>
           <div id="alerts-list"></div>
@@ -195,6 +178,36 @@
           </div>
           <div id="stats-root" class="stats-root"></div>
         </section>
+
+        <section class="panel" data-panel="settings" hidden>
+          <div class="settings-root">
+            <section class="settings-card">
+              <h3 class="settings-card-title">Tài khoản</h3>
+              <div class="kv"><span>Email</span><strong id="settings-email">--</strong></div>
+              <div class="kv"><span>Tên hiển thị</span><strong id="settings-name">--</strong></div>
+              <div class="kv"><span>Vai trò</span><strong id="settings-role">--</strong></div>
+              <p id="settings-dismiss-note" class="muted tiny settings-note"></p>
+            </section>
+
+            <section id="admin-roles" class="admin-roles settings-card" hidden>
+              <div class="admin-roles-head">
+                <h3>Cấp quyền admin</h3>
+                <p class="muted tiny">Chỉ root cấp/thu hồi. Admin được xóa cảnh báo trên web.</p>
+              </div>
+              <form id="admin-grant-form" class="admin-grant-form">
+                <input
+                  id="admin-email"
+                  type="email"
+                  required
+                  placeholder="email@congty.vn"
+                  autocomplete="off"
+                />
+                <button type="submit" class="btn admin-grant-btn">Cấp admin</button>
+              </form>
+              <div id="admin-list" class="admin-list"></div>
+            </section>
+          </div>
+        </section>
       </main>
 
       <nav class="bottom-nav" aria-label="Điều hướng chính">
@@ -209,6 +222,10 @@
         <button type="button" class="nav-btn" data-tab="alerts">
           <span class="icon" aria-hidden="true">🔔</span>
           Cảnh báo
+        </button>
+        <button type="button" class="nav-btn" data-tab="settings">
+          <span class="icon" aria-hidden="true">⚙️</span>
+          Cài đặt
         </button>
       </nav>
 
@@ -315,6 +332,6 @@
       <button type="button" id="update-reload" class="btn update-banner-btn">Cập nhật ngay</button>
     </div>
 
-    <script type="module" src="js/app.js?v=22"></script>
+    <script type="module" src="js/app.js?v=23"></script>
   </body>
 </html>

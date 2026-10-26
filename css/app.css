@@ -86,13 +86,36 @@ body {
   color: #1f7a42;
 }
 
-.admin-roles {
-  margin-bottom: 12px;
-  padding: 12px;
-  border-radius: 14px;
-  border: 1px solid #e2ebf3;
+.settings-root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 8px;
+}
+
+.settings-card {
   background: #fff;
+  border: 1px solid #e2ebf3;
+  border-radius: 14px;
+  padding: 12px;
   box-shadow: 0 4px 12px rgba(18, 36, 56, 0.04);
+}
+
+.settings-card-title {
+  margin: 0 0 10px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #6d8298;
+}
+
+.settings-note {
+  margin: 10px 0 0;
+}
+
+.admin-roles {
+  margin-bottom: 0;
 }
 
 .admin-roles-head h3 {
@@ -926,7 +949,7 @@ main {
   height: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px));
   padding-bottom: env(safe-area-inset-bottom, 0px);
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(10px);
   border-top: 1px solid #d7e0ea;
