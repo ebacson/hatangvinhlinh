@@ -1147,8 +1147,8 @@ main {
   bottom: 0;
   height: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px));
   padding-bottom: env(safe-area-inset-bottom, 0px);
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  display: flex;
+  align-items: stretch;
   background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(10px);
   border-top: 1px solid #d7e0ea;
@@ -1156,6 +1156,8 @@ main {
 }
 
 .nav-btn {
+  flex: 1 1 0;
+  min-width: 0;
   border: 0;
   background: transparent;
   font: inherit;
@@ -1167,6 +1169,10 @@ main {
   justify-content: center;
   gap: 2px;
   cursor: pointer;
+}
+
+.nav-btn[hidden] {
+  display: none !important;
 }
 
 .nav-btn.active {

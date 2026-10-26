@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=31';
+} from './config.js?v=32';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=31';
+} from './forecast.js?v=32';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=31';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=31';
+} from './stats.js?v=32';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=32';
 
 const app = initializeApp(firebaseConfig);
 // Persist session (IndexedDB → localStorage) so PWA/standalone không mất đăng nhập mỗi lần mở.

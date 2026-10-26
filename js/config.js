@@ -1,7 +1,7 @@
 /** GitHub Pages base path (repo name). Local file:// / custom domain: set to ''. */
 export const BASE = '/hatangvinhlinh';
 /** Bump when shipping UI so Android PWA cache can be verified. */
-export const APP_VERSION = '31';
+export const APP_VERSION = '32';
 
 /** Root duy nhất — được xóa cảnh báo và cấp quyền admin. */
 export const ROOT_EMAIL = 'ebacson@gmail.com';
