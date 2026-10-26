@@ -23,7 +23,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=25';
+} from './config.js?v=26';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -31,14 +31,14 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=25';
+} from './forecast.js?v=26';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=25';
+} from './stats.js?v=26';
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -586,7 +586,7 @@ function renderStations() {
             <div class="station-actions">
               <button type="button" class="btn-outline station-action-btn" data-action="edit" data-key="${escapeAttr(
                 s.stationKey
-              )}">Sửa</button>
+              )}">Cập nhật</button>
               <button type="button" class="btn station-action-btn" data-action="history" data-key="${escapeAttr(
                 s.stationKey
               )}">Chi tiết</button>
