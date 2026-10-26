@@ -63,6 +63,90 @@ body {
   white-space: nowrap;
 }
 
+.user-role {
+  display: inline-block;
+  margin-bottom: 2px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: #e8f2fb;
+  color: var(--primary-dark);
+}
+
+.user-role.is-root {
+  background: #fff1e0;
+  color: #b45309;
+}
+
+.user-role.is-admin {
+  background: #eaf7ef;
+  color: #1f7a42;
+}
+
+.admin-roles {
+  margin-bottom: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid #e2ebf3;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(18, 36, 56, 0.04);
+}
+
+.admin-roles-head h3 {
+  margin: 0 0 2px;
+  font-size: 0.88rem;
+  font-weight: 750;
+  color: #1a2b3c;
+}
+
+.admin-roles-head p {
+  margin: 0 0 10px;
+}
+
+.admin-grant-form {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.admin-grant-form input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #cfdce8;
+  background: #f7fafc;
+}
+
+.admin-grant-btn {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  border-radius: 10px;
+}
+
+.admin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #f5f8fb;
+  font-size: 0.85rem;
+}
+
 .brand {
   font-family: var(--display);
   font-weight: 700;

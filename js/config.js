@@ -1,7 +1,10 @@
 /** GitHub Pages base path (repo name). Local file:// / custom domain: set to ''. */
 export const BASE = '/hatangvinhlinh';
 /** Bump when shipping UI so Android PWA cache can be verified. */
-export const APP_VERSION = '21';
+export const APP_VERSION = '22';
+
+/** Root duy nhất — được xóa cảnh báo và cấp quyền admin. */
+export const ROOT_EMAIL = 'ebacson@gmail.com';
 
 export const firebaseConfig = {
   apiKey: 'AIzaSyB-4uSMb-r5Bww3Te664x2VswGx82Ewnf8',

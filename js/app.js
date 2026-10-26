@@ -11,9 +11,19 @@ import {
   onValue,
   update,
   set,
+  remove,
+  get,
   serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-database.js';
-import { BASE, APP_VERSION, firebaseConfig, ALERT_TABS, LONG_RUN_MS, LOW_FUEL_PERCENT } from './config.js?v=21';
+import {
+  BASE,
+  APP_VERSION,
+  ROOT_EMAIL,
+  firebaseConfig,
+  ALERT_TABS,
+  LONG_RUN_MS,
+  LOW_FUEL_PERCENT,
+} from './config.js?v=22';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -21,14 +31,14 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=21';
+} from './forecast.js?v=22';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=21';
+} from './stats.js?v=22';
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -53,11 +63,43 @@ const state = {
   statsPeriodType: 'month',
   statsPeriodKey: '',
   statsStationKey: '',
+  /** Map uid → { email, grantedAt, grantedBy } */
+  admins: {},
+  /** Map emailKey → { email, grantedAt, grantedBy } */
+  pendingAdmins: {},
+  rolesBound: false,
 };
 
 let unsubRunHistory = null;
+let unsubRoles = null;
 let cachedRunEvents = {};
 const RUN_HISTORY_LIMIT = 40;
+
+function normalizeEmail(email) {
+  return String(email || '')
+    .trim()
+    .toLowerCase();
+}
+
+function emailKey(email) {
+  return normalizeEmail(email).replace(/[.#$[\]/]/g, '_');
+}
+
+function isRootUser(user = state.user) {
+  return normalizeEmail(user?.email) === normalizeEmail(ROOT_EMAIL);
+}
+
+function canDismissAlerts() {
+  if (!state.user) return false;
+  if (isRootUser()) return true;
+  return !!state.admins[state.user.uid];
+}
+
+function roleLabel() {
+  if (isRootUser()) return 'root';
+  if (state.admins[state.user?.uid]) return 'admin';
+  return '';
+}
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -245,11 +287,20 @@ function render() {
   }
   showAuth(false);
   $('#user-label').textContent = currentUserLabel();
+  const roleEl = $('#user-role');
+  if (roleEl) {
+    const role = roleLabel();
+    roleEl.hidden = !role;
+    roleEl.textContent = role;
+    roleEl.classList.toggle('is-root', role === 'root');
+    roleEl.classList.toggle('is-admin', role === 'admin');
+  }
   const ver = $('#app-version');
   if (ver) {
     ver.hidden = false;
     ver.textContent = `bản ${APP_VERSION}`;
   }
+  renderAdminRoles();
 
   $$('.nav-btn').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.tab === state.tab);
@@ -596,13 +647,62 @@ function renderAlerts() {
         </div>
         <p class="muted ${warn ? 'danger' : ''}">Lúc: ${escapeHtml(when)} · ${escapeHtml(ago)}</p>
         ${fuelLine}
-        <div class="row-actions">
+        ${
+          canDismissAlerts()
+            ? `<div class="row-actions">
           <button type="button" class="btn-text danger" data-dismiss="${escapeAttr(a.stationKey)}" data-device="${escapeAttr(
-            cfg.id
-          )}">Xóa</button>
-        </div>
+                cfg.id
+              )}">Xóa</button>
+        </div>`
+            : ''
+        }
       </article>`;
     })
+    .join('');
+}
+
+function renderAdminRoles() {
+  const box = $('#admin-roles');
+  const list = $('#admin-list');
+  if (!box || !list) return;
+  const show = state.tab === 'alerts' && isRootUser();
+  box.hidden = !show;
+  if (!show) return;
+
+  const adminRows = Object.entries(state.admins).map(([uid, info]) => ({
+    kind: 'active',
+    key: uid,
+    email: info.email || uid,
+    meta: info.grantedBy ? `bởi ${info.grantedBy}` : 'admin',
+  }));
+  const pendingRows = Object.entries(state.pendingAdmins).map(([key, info]) => ({
+    kind: 'pending',
+    key,
+    email: info.email || key,
+    meta: 'chờ đăng nhập lần đầu',
+  }));
+  const rows = [...adminRows, ...pendingRows].sort((a, b) =>
+    a.email.localeCompare(b.email, 'vi')
+  );
+
+  if (!rows.length) {
+    list.innerHTML = `<p class="muted tiny">Chưa cấp admin nào.</p>`;
+    return;
+  }
+  list.innerHTML = rows
+    .map(
+      (r) => `<div class="admin-row">
+        <div>
+          <strong>${escapeHtml(r.email)}</strong>
+          <div class="muted tiny">${escapeHtml(r.meta)}${
+            r.kind === 'pending' ? '' : ''
+          }</div>
+        </div>
+        <button type="button" class="btn-text danger" data-revoke-admin="${escapeAttr(r.key)}" data-revoke-kind="${escapeAttr(
+          r.kind
+        )}">Thu hồi</button>
+      </div>`
+    )
     .join('');
 }
 
@@ -831,6 +931,10 @@ function escapeAttr(s) {
 
 async function dismissAlert(stationKey, deviceType) {
   if (!state.user) return;
+  if (!canDismissAlerts()) {
+    toast('Chỉ root hoặc admin được xóa cảnh báo');
+    return;
+  }
   const label =
     state.stations.find((s) => s.stationKey === stationKey)?.profile.maTram || stationKey;
   if (
@@ -1021,6 +1125,16 @@ function bindEvents() {
     }
   });
 
+  $('#admin-grant-form')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    grantAdmin($('#admin-email')?.value || '');
+  });
+  $('#admin-list')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-revoke-admin]');
+    if (!btn) return;
+    revokeAdmin(btn.dataset.revokeKind, btn.dataset.revokeAdmin);
+  });
+
   $('#sheet-backdrop').addEventListener('click', closeDetail);
   $('#detail-close').addEventListener('click', closeDetail);
   $('#detail-save').addEventListener('click', saveStation);
@@ -1052,6 +1166,138 @@ function bindStationsListener() {
   });
 }
 
+async function upsertCurrentUserProfile(user) {
+  const email = normalizeEmail(user.email);
+  if (!email) return;
+  try {
+    await update(ref(db, `users/${user.uid}`), {
+      email,
+      displayName: user.displayName || state.displayName || '',
+      lastLoginAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (_) {
+    /* ignore profile write failures */
+  }
+
+  // Promote pending admin → active by uid
+  const key = emailKey(email);
+  try {
+    const pendingSnap = await get(ref(db, `roles/pendingAdmins/${key}`));
+    if (pendingSnap.exists()) {
+      const pending = pendingSnap.val() || {};
+      await set(ref(db, `roles/admins/${user.uid}`), {
+        email,
+        grantedAt: pending.grantedAt || serverTimestamp(),
+        grantedBy: pending.grantedBy || 'root',
+        grantedByUid: pending.grantedByUid || null,
+        activatedAt: serverTimestamp(),
+      });
+      await remove(ref(db, `roles/pendingAdmins/${key}`));
+    }
+  } catch (_) {
+    /* ignore role promote failures */
+  }
+}
+
+function bindRolesListener() {
+  if (state.rolesBound) return;
+  state.rolesBound = true;
+  const rolesRef = ref(db, 'roles');
+  unsubRoles = onValue(rolesRef, (snap) => {
+    const val = snap.val() || {};
+    state.admins = val.admins || {};
+    state.pendingAdmins = val.pendingAdmins || {};
+    render();
+  });
+}
+
+function stopRolesListener() {
+  if (unsubRoles) {
+    unsubRoles();
+    unsubRoles = null;
+  }
+  state.rolesBound = false;
+  state.admins = {};
+  state.pendingAdmins = {};
+}
+
+async function grantAdmin(emailRaw) {
+  if (!isRootUser()) {
+    toast('Chỉ root được cấp quyền admin');
+    return;
+  }
+  const email = normalizeEmail(emailRaw);
+  if (!email || !email.includes('@')) {
+    toast('Email không hợp lệ');
+    return;
+  }
+  if (email === normalizeEmail(ROOT_EMAIL)) {
+    toast('Root đã có đủ quyền');
+    return;
+  }
+  const who = currentUserLabel();
+  const key = emailKey(email);
+
+  // Prefer uid if user already logged in once
+  let existingUid = null;
+  try {
+    const usersSnap = await get(ref(db, 'users'));
+    const users = usersSnap.val() || {};
+    for (const [uid, u] of Object.entries(users)) {
+      if (normalizeEmail(u?.email) === email) {
+        existingUid = uid;
+        break;
+      }
+    }
+  } catch (_) {
+    /* continue with pending */
+  }
+
+  try {
+    if (existingUid) {
+      await set(ref(db, `roles/admins/${existingUid}`), {
+        email,
+        grantedAt: serverTimestamp(),
+        grantedBy: who,
+        grantedByUid: state.user.uid,
+      });
+      await remove(ref(db, `roles/pendingAdmins/${key}`));
+      toast(`Đã cấp admin: ${email}`);
+    } else {
+      await set(ref(db, `roles/pendingAdmins/${key}`), {
+        email,
+        grantedAt: serverTimestamp(),
+        grantedBy: who,
+        grantedByUid: state.user.uid,
+      });
+      toast(`Đã cấp admin (chờ đăng nhập): ${email}`);
+    }
+    const input = $('#admin-email');
+    if (input) input.value = '';
+  } catch (e) {
+    toast('Cấp quyền thất bại: ' + (e.message || e));
+  }
+}
+
+async function revokeAdmin(kind, key) {
+  if (!isRootUser()) {
+    toast('Chỉ root được thu hồi admin');
+    return;
+  }
+  if (!confirm('Thu hồi quyền admin của tài khoản này?')) return;
+  try {
+    if (kind === 'pending') {
+      await remove(ref(db, `roles/pendingAdmins/${key}`));
+    } else {
+      await remove(ref(db, `roles/admins/${key}`));
+    }
+    toast('Đã thu hồi admin');
+  } catch (e) {
+    toast('Thu hồi thất bại: ' + (e.message || e));
+  }
+}
+
 function startAuth() {
   onAuthStateChanged(auth, async (user) => {
     state.user = user;
@@ -1067,12 +1313,15 @@ function startAuth() {
           { onlyOnce: true }
         );
       }
+      await upsertCurrentUserProfile(user);
+      bindRolesListener();
       bindStationsListener();
     } else {
       state.displayName = '';
       state.selectedKey = null;
       state.sheetMode = null;
       stopRunHistoryListener();
+      stopRolesListener();
     }
     render();
   });

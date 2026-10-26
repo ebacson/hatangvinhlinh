@@ -18,7 +18,7 @@
       href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700&family=Sora:wght@600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="css/app.css?v=21" />
+    <link rel="stylesheet" href="css/app.css?v=22" />
   </head>
   <body>
     <!-- Auth -->
@@ -115,6 +115,7 @@
             <p class="app-version" id="app-version" hidden></p>
           </div>
           <div class="user-menu">
+            <span id="user-role" class="user-role" hidden></span>
             <span id="user-label" class="user-label"></span>
             <button type="button" class="btn-text" id="logout-btn">Thoát</button>
           </div>
@@ -146,6 +147,23 @@
         </section>
 
         <section class="panel" data-panel="alerts" hidden>
+          <div id="admin-roles" class="admin-roles" hidden>
+            <div class="admin-roles-head">
+              <h3>Quyền xóa cảnh báo</h3>
+              <p class="muted tiny">Root cấp admin — chỉ root và admin được xóa cảnh báo.</p>
+            </div>
+            <form id="admin-grant-form" class="admin-grant-form">
+              <input
+                id="admin-email"
+                type="email"
+                required
+                placeholder="email@congty.vn"
+                autocomplete="off"
+              />
+              <button type="submit" class="btn admin-grant-btn">Cấp admin</button>
+            </form>
+            <div id="admin-list" class="admin-list"></div>
+          </div>
           <div id="alert-tabs" class="chips" role="tablist"></div>
           <div id="alerts-empty" class="empty" hidden>Không có cảnh báo đang active.</div>
           <div id="alerts-list"></div>
@@ -297,6 +315,6 @@
       <button type="button" id="update-reload" class="btn update-banner-btn">Cập nhật ngay</button>
     </div>
 
-    <script type="module" src="js/app.js?v=21"></script>
+    <script type="module" src="js/app.js?v=22"></script>
   </body>
 </html>
