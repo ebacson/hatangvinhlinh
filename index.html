@@ -18,7 +18,7 @@
       href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700&family=Sora:wght@600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="css/app.css?v=23" />
+    <link rel="stylesheet" href="css/app.css?v=24" />
   </head>
   <body>
     <!-- Auth -->
@@ -181,12 +181,18 @@
 
         <section class="panel" data-panel="settings" hidden>
           <div class="settings-root">
-            <section class="settings-card">
-              <h3 class="settings-card-title">Tài khoản</h3>
-              <div class="kv"><span>Email</span><strong id="settings-email">--</strong></div>
-              <div class="kv"><span>Tên hiển thị</span><strong id="settings-name">--</strong></div>
-              <div class="kv"><span>Vai trò</span><strong id="settings-role">--</strong></div>
-              <p id="settings-dismiss-note" class="muted tiny settings-note"></p>
+            <section class="settings-profile">
+              <div class="settings-profile-top">
+                <div id="settings-avatar" class="settings-avatar" aria-hidden="true">?</div>
+                <div class="settings-profile-text">
+                  <h2 id="settings-name" class="settings-display-name">—</h2>
+                  <p id="settings-email" class="settings-email">—</p>
+                </div>
+              </div>
+              <div class="settings-profile-meta">
+                <span id="settings-role" class="settings-role-pill">User</span>
+                <span id="settings-dismiss-note" class="settings-perm">—</span>
+              </div>
             </section>
 
             <section id="admin-roles" class="admin-roles settings-card" hidden>
@@ -332,6 +338,6 @@
       <button type="button" id="update-reload" class="btn update-banner-btn">Cập nhật ngay</button>
     </div>
 
-    <script type="module" src="js/app.js?v=23"></script>
+    <script type="module" src="js/app.js?v=24"></script>
   </body>
 </html>

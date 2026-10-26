@@ -23,7 +23,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=23';
+} from './config.js?v=24';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -31,14 +31,14 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=23';
+} from './forecast.js?v=24';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=23';
+} from './stats.js?v=24';
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -665,15 +665,32 @@ function renderSettings() {
   const nameEl = $('#settings-name');
   const roleEl = $('#settings-role');
   const noteEl = $('#settings-dismiss-note');
+  const avatarEl = $('#settings-avatar');
   if (!emailEl) return;
 
-  emailEl.textContent = state.user?.email || '--';
-  nameEl.textContent = currentUserLabel();
+  const name = currentUserLabel();
+  const email = state.user?.email || '—';
+  emailEl.textContent = email;
+  nameEl.textContent = name;
+
   const role = roleLabel();
-  roleEl.textContent = role === 'root' ? 'Root' : role === 'admin' ? 'Admin' : 'User';
-  noteEl.textContent = canDismissAlerts()
-    ? 'Bạn được phép xóa cảnh báo trên web.'
-    : 'Bạn không được xóa cảnh báo. Liên hệ root để cấp admin.';
+  const roleText = role === 'root' ? 'Root' : role === 'admin' ? 'Admin' : 'User';
+  roleEl.textContent = roleText;
+  roleEl.classList.toggle('is-root', role === 'root');
+  roleEl.classList.toggle('is-admin', role === 'admin');
+  roleEl.classList.toggle('is-user', !role);
+
+  const canDismiss = canDismissAlerts();
+  noteEl.textContent = canDismiss ? 'Được xóa cảnh báo' : 'Không được xóa cảnh báo';
+  noteEl.classList.toggle('is-ok', canDismiss);
+  noteEl.classList.toggle('is-no', !canDismiss);
+
+  if (avatarEl) {
+    const initial = (name || email || '?').trim().charAt(0).toUpperCase() || '?';
+    avatarEl.textContent = initial;
+    avatarEl.classList.toggle('is-root', role === 'root');
+    avatarEl.classList.toggle('is-admin', role === 'admin');
+  }
 
   renderAdminRoles();
 }

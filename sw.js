@@ -1,19 +1,19 @@
-const CACHE = 'htvl-v23';
+const CACHE = 'htvl-v24';
 const BASE = '/hatangvinhlinh';
 const ASSETS = [
   `${BASE}/`,
   `${BASE}/index.html`,
-  `${BASE}/index.html?v=23`,
+  `${BASE}/index.html?v=24`,
   `${BASE}/css/app.css`,
-  `${BASE}/css/app.css?v=23`,
+  `${BASE}/css/app.css?v=24`,
   `${BASE}/js/app.js`,
-  `${BASE}/js/app.js?v=23`,
+  `${BASE}/js/app.js?v=24`,
   `${BASE}/js/config.js`,
-  `${BASE}/js/config.js?v=23`,
+  `${BASE}/js/config.js?v=24`,
   `${BASE}/js/forecast.js`,
-  `${BASE}/js/forecast.js?v=23`,
+  `${BASE}/js/forecast.js?v=24`,
   `${BASE}/js/stats.js`,
-  `${BASE}/js/stats.js?v=23`,
+  `${BASE}/js/stats.js?v=24`,
   `${BASE}/manifest.webmanifest`,
   `${BASE}/icons/icon-192.png`,
   `${BASE}/icons/icon-512.png`,
@@ -80,7 +80,7 @@ self.addEventListener('fetch', (event) => {
         .catch(() =>
           caches
             .match(req)
-            .then((c) => c || caches.match(`${BASE}/index.html`) || caches.match(`${BASE}/index.html?v=23`))
+            .then((c) => c || caches.match(`${BASE}/index.html`) || caches.match(`${BASE}/index.html?v=24`))
         )
     );
     return;

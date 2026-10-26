@@ -86,23 +86,124 @@ body {
   color: #1f7a42;
 }
 
-.settings-root .kv {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 0;
-  border-bottom: 1px solid #e8eef4;
-  font-size: 0.92rem;
-}
-.settings-root .kv strong {
-  text-align: right;
-  word-break: break-word;
-}
 .settings-root {
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding-bottom: 8px;
+}
+
+.settings-profile {
+  background: linear-gradient(160deg, #f3f8fd 0%, #ffffff 55%);
+  border: 1px solid #d7e4f0;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 8px 22px rgba(18, 36, 56, 0.06);
+}
+
+.settings-profile-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.settings-avatar {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: #fff;
+  background: linear-gradient(145deg, #3d8fc9, #1a6fb5);
+}
+
+.settings-avatar.is-root {
+  background: linear-gradient(145deg, #f0a35a, #c56a12);
+}
+
+.settings-avatar.is-admin {
+  background: linear-gradient(145deg, #4caf7a, #1f7a42);
+}
+
+.settings-profile-text {
+  min-width: 0;
+  flex: 1;
+}
+
+.settings-display-name {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #1a2b3c;
+  line-height: 1.25;
+  word-break: break-word;
+}
+
+.settings-email {
+  margin: 4px 0 0;
+  font-size: 0.84rem;
+  color: #6d8298;
+  word-break: break-all;
+}
+
+.settings-profile-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #e4edf5;
+}
+
+.settings-role-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: #eef2f6;
+  color: #5a6f84;
+}
+
+.settings-role-pill.is-root {
+  background: #fff1e0;
+  color: #b45309;
+}
+
+.settings-role-pill.is-admin {
+  background: #eaf7ef;
+  color: #1f7a42;
+}
+
+.settings-perm {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 650;
+  background: #f1f4f8;
+  color: #6d8298;
+}
+
+.settings-perm.is-ok {
+  background: #eaf7ef;
+  color: #1f7a42;
+}
+
+.settings-perm.is-no {
+  background: #f7eef0;
+  color: #a13d4a;
 }
 
 .settings-card {
@@ -111,19 +212,6 @@ body {
   border-radius: 14px;
   padding: 12px;
   box-shadow: 0 4px 12px rgba(18, 36, 56, 0.04);
-}
-
-.settings-card-title {
-  margin: 0 0 10px;
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #6d8298;
-}
-
-.settings-note {
-  margin: 10px 0 0;
 }
 
 .admin-roles {
