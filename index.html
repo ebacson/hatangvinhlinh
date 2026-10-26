@@ -18,9 +18,16 @@
       href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700&family=Sora:wght@600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="css/app.css?v=27" />
+    <link rel="stylesheet" href="css/app.css?v=28" />
   </head>
   <body>
+    <div id="boot-screen" class="boot-screen" role="status" aria-live="polite">
+      <div class="boot-card">
+        <div class="boot-spinner" aria-hidden="true"></div>
+        <p>Đang khôi phục phiên đăng nhập…</p>
+      </div>
+    </div>
+
     <!-- Auth -->
     <div id="auth-screen" class="auth-screen" hidden>
       <div class="auth-layout">
@@ -338,6 +345,6 @@
       <button type="button" id="update-reload" class="btn update-banner-btn">Cập nhật ngay</button>
     </div>
 
-    <script type="module" src="js/app.js?v=27"></script>
+    <script type="module" src="js/app.js?v=28"></script>
   </body>
 </html>

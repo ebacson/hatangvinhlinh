@@ -1,6 +1,9 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js';
 import {
   getAuth,
+  initializeAuth,
+  indexedDBLocalPersistence,
+  browserLocalPersistence,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut,
@@ -23,7 +26,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=27';
+} from './config.js?v=28';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -31,22 +34,32 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=27';
+} from './forecast.js?v=28';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=27';
+} from './stats.js?v=28';
 
 const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
+// Persist session (IndexedDB → localStorage) so PWA/standalone không mất đăng nhập mỗi lần mở.
+let auth;
+try {
+  auth = initializeAuth(app, {
+    persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+  });
+} catch (_) {
+  auth = getAuth(app);
+}
 const db = getDatabase(app);
 const stationsRef = ref(db, 'stations');
 
 const state = {
   user: null,
+  /** false đến khi Firebase báo auth state lần đầu */
+  authReady: false,
   displayName: '',
   tab: 'stations',
   stations: [],
@@ -228,7 +241,13 @@ function editorLine(profile) {
 
 /* ---------- Auth UI ---------- */
 
+function showBoot(show) {
+  const boot = $('#boot-screen');
+  if (boot) boot.hidden = !show;
+}
+
 function showAuth(show) {
+  showBoot(false);
   $('#auth-screen').hidden = !show;
   $('#app-shell').hidden = show;
   document.body.classList.toggle('is-auth', show);
@@ -294,6 +313,14 @@ async function handleLogout() {
 /* ---------- Render ---------- */
 
 function render() {
+  // Chưa biết session — không đẩy sang login (tránh mất trạng thái mỗi lần mở app).
+  if (!state.authReady) {
+    showBoot(true);
+    $('#auth-screen').hidden = true;
+    $('#app-shell').hidden = true;
+    document.body.classList.remove('is-auth');
+    return;
+  }
   if (!state.user) {
     showAuth(true);
     return;
@@ -1425,6 +1452,7 @@ async function revokeAdmin(kind, key) {
 function startAuth() {
   onAuthStateChanged(auth, async (user) => {
     state.user = user;
+    state.authReady = true;
     if (user) {
       state.displayName = user.displayName || '';
       if (!state.displayName) {
@@ -1437,7 +1465,8 @@ function startAuth() {
           { onlyOnce: true }
         );
       }
-      await upsertCurrentUserProfile(user);
+      // Không chặn UI nếu ghi profile/roles chậm hoặc lỗi mạng.
+      upsertCurrentUserProfile(user).catch(() => {});
       bindRolesListener();
       bindStationsListener();
     } else {

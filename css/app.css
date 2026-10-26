@@ -296,6 +296,43 @@ body {
 }
 
 /* ---------- Auth (professional) ---------- */
+.boot-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  background: #e8eef4;
+  padding: 24px;
+}
+
+.boot-screen[hidden] {
+  display: none !important;
+}
+
+.boot-card {
+  text-align: center;
+  color: #4a6278;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.boot-spinner {
+  width: 36px;
+  height: 36px;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  border: 3px solid #c5d3e0;
+  border-top-color: #1a6fb5;
+  animation: bootSpin 0.7s linear infinite;
+}
+
+@keyframes bootSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 body.is-auth {
   padding-bottom: 0;
   background: #0c1a28;
