@@ -6,6 +6,8 @@ import {
   browserLocalPersistence,
   onAuthStateChanged,
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  updateProfile,
   signOut,
 } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js';
 import {
@@ -26,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=29';
+} from './config.js?v=30';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -34,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=29';
+} from './forecast.js?v=30';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=29';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=29';
+} from './stats.js?v=30';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=30';
 
 const app = initializeApp(firebaseConfig);
 // Persist session (IndexedDB → localStorage) so PWA/standalone không mất đăng nhập mỗi lần mở.
@@ -61,6 +63,8 @@ const state = {
   user: null,
   /** false đến khi Firebase báo auth state lần đầu */
   authReady: false,
+  /** 'login' | 'register' */
+  authMode: 'login',
   displayName: '',
   tab: 'stations',
   stations: [],
@@ -81,11 +85,22 @@ const state = {
   admins: {},
   /** Map emailKey → { email, grantedAt, grantedBy } */
   pendingAdmins: {},
+  /** Map uid → { email, blockedAt, blockedBy } */
+  blocked: {},
+  /** Map emailKey → { email, blockedAt, blockedBy } */
+  pendingBlocked: {},
   rolesBound: false,
+  /** true sau snapshot roles đầu tiên (để biết blocked trước khi hiện app) */
+  rolesReady: false,
+  /** Map uid → { email, displayName, ... } */
+  directoryUsers: {},
+  usersBound: false,
 };
 
-let unsubRunHistory = null;
 let unsubRoles = null;
+let unsubUsers = null;
+
+let unsubRunHistory = null;
 let cachedRunEvents = {};
 const RUN_HISTORY_LIMIT = 40;
 
@@ -120,6 +135,30 @@ function canViewStats() {
 
 function canManageRunHistory() {
   return isPrivilegedUser();
+}
+
+function canManageUserBlocks() {
+  return isPrivilegedUser();
+}
+
+function isBlockedUser(user = state.user) {
+  if (!user) return false;
+  if (isRootUser(user)) return false;
+  if (state.blocked[user.uid]) return true;
+  const key = emailKey(user.email);
+  return !!(key && state.pendingBlocked[key]);
+}
+
+/** Admin/root được chặn user thường; root được chặn cả admin. Không chặn root / chính mình. */
+function canBlockTarget(uid, email) {
+  if (!canManageUserBlocks()) return false;
+  const em = normalizeEmail(email);
+  if (!em) return false;
+  if (em === normalizeEmail(ROOT_EMAIL)) return false;
+  if (uid && uid === state.user?.uid) return false;
+  if (em === normalizeEmail(state.user?.email)) return false;
+  if (!isRootUser() && uid && state.admins[uid]) return false;
+  return true;
 }
 
 function roleLabel() {
@@ -247,11 +286,47 @@ function showBoot(show) {
   if (boot) boot.hidden = !show;
 }
 
+function showBlocked(show) {
+  const el = $('#blocked-screen');
+  if (el) el.hidden = !show;
+  document.body.classList.toggle('is-blocked', show);
+}
+
 function showAuth(show) {
   showBoot(false);
+  showBlocked(false);
   $('#auth-screen').hidden = !show;
   $('#app-shell').hidden = show;
   document.body.classList.toggle('is-auth', show);
+}
+
+function setAuthMode(mode) {
+  state.authMode = mode === 'register' ? 'register' : 'login';
+  const isReg = state.authMode === 'register';
+  $$('.auth-tab').forEach((tab) => {
+    const on = tab.dataset.authMode === state.authMode;
+    tab.classList.toggle('active', on);
+    tab.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  const heading = $('#auth-heading');
+  const sub = $('#auth-subheading');
+  if (heading) heading.textContent = isReg ? 'Tạo tài khoản' : 'Chào mừng trở lại';
+  if (sub) {
+    sub.textContent = isReg
+      ? 'Đăng ký để theo dõi trạm và cảnh báo'
+      : 'Đăng nhập để tiếp tục quản lý trạm';
+  }
+  const nameField = $('#auth-name-field');
+  const confirmField = $('#auth-confirm-field');
+  if (nameField) nameField.hidden = !isReg;
+  if (confirmField) confirmField.hidden = !isReg;
+  const confirmInput = $('#auth-password-confirm');
+  if (confirmInput) confirmInput.required = isReg;
+  const pw = $('#auth-password');
+  if (pw) pw.autocomplete = isReg ? 'new-password' : 'current-password';
+  const label = $('.auth-submit-label');
+  if (label) label.textContent = isReg ? 'Đăng ký' : 'Đăng nhập';
+  showAuthError('');
 }
 
 function setAuthLoading(loading) {
@@ -275,6 +350,10 @@ function authErrorMessage(code) {
     case 'auth/wrong-password':
     case 'auth/invalid-credential':
       return 'Email hoặc mật khẩu không đúng.';
+    case 'auth/email-already-in-use':
+      return 'Email này đã được đăng ký. Hãy đăng nhập.';
+    case 'auth/weak-password':
+      return 'Mật khẩu cần ít nhất 6 ký tự.';
     case 'auth/too-many-requests':
       return 'Thử quá nhiều lần. Vui lòng đợi rồi thử lại.';
     case 'auth/network-request-failed':
@@ -284,7 +363,9 @@ function authErrorMessage(code) {
     case 'auth/user-disabled':
       return 'Tài khoản đã bị vô hiệu hóa.';
     default:
-      return 'Không thể đăng nhập. Thử lại.';
+      return state.authMode === 'register'
+        ? 'Không thể đăng ký. Thử lại.'
+        : 'Không thể đăng nhập. Thử lại.';
   }
 }
 
@@ -292,11 +373,33 @@ async function handleAuthSubmit(e) {
   e.preventDefault();
   const email = $('#auth-email').value.trim();
   const password = $('#auth-password').value;
+  const isReg = state.authMode === 'register';
   showAuthError('');
+  if (isReg) {
+    const confirm = $('#auth-password-confirm')?.value || '';
+    if (password !== confirm) {
+      showAuthError('Mật khẩu nhập lại không khớp.');
+      return;
+    }
+  }
   setAuthLoading(true);
   try {
-    await signInWithEmailAndPassword(auth, email, password);
-    toast('Đã đăng nhập');
+    if (isReg) {
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      const name = ($('#auth-display-name')?.value || '').trim();
+      if (name) {
+        try {
+          await updateProfile(cred.user, { displayName: name });
+          state.displayName = name;
+        } catch (_) {
+          /* ignore */
+        }
+      }
+      toast('Đăng ký thành công');
+    } else {
+      await signInWithEmailAndPassword(auth, email, password);
+      toast('Đã đăng nhập');
+    }
   } catch (err) {
     showAuthError(authErrorMessage(err.code) || err.message || 'Không thể xác thực.');
   } finally {
@@ -308,6 +411,8 @@ async function handleLogout() {
   await signOut(auth);
   state.stations = [];
   state.selectedKey = null;
+  state.directoryUsers = {};
+  stopUsersListener();
   toast('Đã đăng xuất');
 }
 
@@ -317,6 +422,7 @@ function render() {
   // Chưa biết session — không đẩy sang login (tránh mất trạng thái mỗi lần mở app).
   if (!state.authReady) {
     showBoot(true);
+    showBlocked(false);
     $('#auth-screen').hidden = true;
     $('#app-shell').hidden = true;
     document.body.classList.remove('is-auth');
@@ -324,6 +430,26 @@ function render() {
   }
   if (!state.user) {
     showAuth(true);
+    return;
+  }
+  // Đợi roles (blocked/admins) trước khi mở shell — tránh flash dữ liệu với user bị chặn.
+  if (!state.rolesReady) {
+    showBoot(true);
+    showBlocked(false);
+    $('#auth-screen').hidden = true;
+    $('#app-shell').hidden = true;
+    document.body.classList.remove('is-auth');
+    return;
+  }
+  if (isBlockedUser()) {
+    showBoot(false);
+    showBlocked(true);
+    $('#auth-screen').hidden = true;
+    $('#app-shell').hidden = true;
+    document.body.classList.remove('is-auth');
+    state.selectedKey = null;
+    state.sheetMode = null;
+    stopRunHistoryListener();
     return;
   }
   showAuth(false);
@@ -878,6 +1004,7 @@ function renderSettings() {
   }
 
   renderAdminRoles();
+  renderUserModeration();
 }
 
 function renderAdminRoles() {
@@ -920,6 +1047,119 @@ function renderAdminRoles() {
         )}">Thu hồi</button>
       </div>`
     )
+    .join('');
+}
+
+function findUidByEmail(email) {
+  const want = normalizeEmail(email);
+  for (const [uid, u] of Object.entries(state.directoryUsers)) {
+    if (normalizeEmail(u?.email) === want) return uid;
+  }
+  return null;
+}
+
+function renderUserModeration() {
+  const box = $('#user-moderation');
+  const list = $('#user-mod-list');
+  if (!box || !list) return;
+  const show = canManageUserBlocks();
+  box.hidden = !show;
+  if (!show) return;
+
+  if (canManageUserBlocks()) bindUsersListener();
+
+  const rows = [];
+  const seen = new Set();
+
+  for (const [uid, info] of Object.entries(state.blocked)) {
+    const email = info.email || uid;
+    seen.add(normalizeEmail(email));
+    rows.push({
+      uid,
+      email,
+      name: state.directoryUsers[uid]?.displayName || '',
+      status: 'blocked',
+      meta: info.blockedBy ? `chặn bởi ${info.blockedBy}` : 'đã chặn',
+      canAct: canBlockTarget(uid, email),
+    });
+  }
+  for (const [key, info] of Object.entries(state.pendingBlocked)) {
+    const email = info.email || key;
+    const em = normalizeEmail(email);
+    if (seen.has(em)) continue;
+    seen.add(em);
+    rows.push({
+      uid: '',
+      email,
+      emailKey: key,
+      name: '',
+      status: 'pending-block',
+      meta: 'chờ đăng nhập · đã đánh dấu chặn',
+      canAct: canBlockTarget('', email),
+    });
+  }
+  for (const [uid, u] of Object.entries(state.directoryUsers)) {
+    const email = u?.email || '';
+    const em = normalizeEmail(email);
+    if (!em || seen.has(em)) continue;
+    if (em === normalizeEmail(ROOT_EMAIL)) continue;
+    seen.add(em);
+    const isAdmin = !!state.admins[uid];
+    rows.push({
+      uid,
+      email,
+      name: u.displayName || '',
+      status: isAdmin ? 'admin' : 'user',
+      meta: isAdmin ? 'admin' : 'user',
+      canAct: canBlockTarget(uid, email),
+    });
+  }
+
+  rows.sort((a, b) => {
+    const rank = { blocked: 0, 'pending-block': 1, user: 2, admin: 3 };
+    const d = (rank[a.status] ?? 9) - (rank[b.status] ?? 9);
+    if (d !== 0) return d;
+    return a.email.localeCompare(b.email, 'vi');
+  });
+
+  if (!rows.length) {
+    list.innerHTML = `<p class="muted tiny">Chưa có user nào trong danh bạ. User sẽ xuất hiện sau khi đăng ký/đăng nhập.</p>`;
+    return;
+  }
+
+  list.innerHTML = rows
+    .map((r) => {
+      const blocked = r.status === 'blocked' || r.status === 'pending-block';
+      const statusLabel =
+        r.status === 'blocked'
+          ? 'Đã chặn'
+          : r.status === 'pending-block'
+            ? 'Chờ chặn'
+            : r.status === 'admin'
+              ? 'Admin'
+              : 'User';
+      let action = '';
+      if (r.canAct) {
+        if (blocked) {
+          action = `<button type="button" class="btn-text" data-unblock-user="${escapeAttr(
+            r.uid || r.emailKey || ''
+          )}" data-unblock-kind="${escapeAttr(r.uid ? 'active' : 'pending')}">Bỏ chặn</button>`;
+        } else {
+          action = `<button type="button" class="btn-text danger" data-block-user="${escapeAttr(
+            r.uid
+          )}" data-block-email="${escapeAttr(r.email)}">Chặn</button>`;
+        }
+      }
+      return `<div class="admin-row">
+        <div>
+          <strong>${escapeHtml(r.email)}</strong>
+          <div class="muted tiny">${escapeHtml(
+            [r.name, statusLabel, r.meta].filter(Boolean).join(' · ')
+          )}</div>
+        </div>
+        ${action}
+      </div>`;
+    })
     .join('');
 }
 
@@ -1316,7 +1556,11 @@ function bindEvents() {
     $('#toggle-password').setAttribute('aria-label', show ? 'Ẩn mật khẩu' : 'Hiện mật khẩu');
   });
   $('#auth-form').addEventListener('submit', handleAuthSubmit);
+  $$('.auth-tab').forEach((tab) => {
+    tab.addEventListener('click', () => setAuthMode(tab.dataset.authMode));
+  });
   $('#logout-btn').addEventListener('click', handleLogout);
+  $('#blocked-logout')?.addEventListener('click', handleLogout);
 
   $$('.nav-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -1406,6 +1650,21 @@ function bindEvents() {
     if (!btn) return;
     revokeAdmin(btn.dataset.revokeKind, btn.dataset.revokeAdmin);
   });
+  $('#block-user-form')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    blockUserByEmail($('#block-user-email')?.value || '');
+  });
+  $('#user-mod-list')?.addEventListener('click', (e) => {
+    const blockBtn = e.target.closest('[data-block-user]');
+    if (blockBtn) {
+      blockUserByEmail(blockBtn.dataset.blockEmail || '', blockBtn.dataset.blockUser || '');
+      return;
+    }
+    const unblockBtn = e.target.closest('[data-unblock-user]');
+    if (unblockBtn) {
+      unblockUser(unblockBtn.dataset.unblockKind, unblockBtn.dataset.unblockUser);
+    }
+  });
 
   $('#sheet-backdrop').addEventListener('click', closeDetail);
   $('#detail-close').addEventListener('click', closeDetail);
@@ -1452,8 +1711,8 @@ async function upsertCurrentUserProfile(user) {
     /* ignore profile write failures */
   }
 
-  // Promote pending admin → active by uid
   const key = emailKey(email);
+  // Promote pending admin → active by uid
   try {
     const pendingSnap = await get(ref(db, `roles/pendingAdmins/${key}`));
     if (pendingSnap.exists()) {
@@ -1470,6 +1729,24 @@ async function upsertCurrentUserProfile(user) {
   } catch (_) {
     /* ignore role promote failures */
   }
+
+  // Promote pending block → active by uid
+  try {
+    const pendingBlock = await get(ref(db, `roles/pendingBlocked/${key}`));
+    if (pendingBlock.exists()) {
+      const pending = pendingBlock.val() || {};
+      await set(ref(db, `roles/blocked/${user.uid}`), {
+        email,
+        blockedAt: pending.blockedAt || serverTimestamp(),
+        blockedBy: pending.blockedBy || 'admin',
+        blockedByUid: pending.blockedByUid || null,
+        activatedAt: serverTimestamp(),
+      });
+      await remove(ref(db, `roles/pendingBlocked/${key}`));
+    }
+  } catch (_) {
+    /* ignore */
+  }
 }
 
 function bindRolesListener() {
@@ -1480,6 +1757,10 @@ function bindRolesListener() {
     const val = snap.val() || {};
     state.admins = val.admins || {};
     state.pendingAdmins = val.pendingAdmins || {};
+    state.blocked = val.blocked || {};
+    state.pendingBlocked = val.pendingBlocked || {};
+    state.rolesReady = true;
+    if (canManageUserBlocks()) bindUsersListener();
     render();
   });
 }
@@ -1490,8 +1771,91 @@ function stopRolesListener() {
     unsubRoles = null;
   }
   state.rolesBound = false;
+  state.rolesReady = false;
   state.admins = {};
   state.pendingAdmins = {};
+  state.blocked = {};
+  state.pendingBlocked = {};
+}
+
+function bindUsersListener() {
+  if (state.usersBound || !canManageUserBlocks()) return;
+  state.usersBound = true;
+  unsubUsers = onValue(ref(db, 'users'), (snap) => {
+    state.directoryUsers = snap.val() || {};
+    if (state.tab === 'settings') renderUserModeration();
+  });
+}
+
+function stopUsersListener() {
+  if (unsubUsers) {
+    unsubUsers();
+    unsubUsers = null;
+  }
+  state.usersBound = false;
+  state.directoryUsers = {};
+}
+
+async function blockUserByEmail(emailRaw, uidHint = '') {
+  if (!canManageUserBlocks()) {
+    toast('Chỉ admin hoặc root được chặn user');
+    return;
+  }
+  const email = normalizeEmail(emailRaw);
+  if (!email || !email.includes('@')) {
+    toast('Email không hợp lệ');
+    return;
+  }
+  let uid = uidHint || findUidByEmail(email);
+  if (!canBlockTarget(uid || '', email)) {
+    toast('Không thể chặn tài khoản này');
+    return;
+  }
+  if (!confirm(`Chặn tài khoản ${email}? Họ sẽ không xem được dữ liệu.`)) return;
+  const who = currentUserLabel();
+  const key = emailKey(email);
+  try {
+    if (uid) {
+      await set(ref(db, `roles/blocked/${uid}`), {
+        email,
+        blockedAt: serverTimestamp(),
+        blockedBy: who,
+        blockedByUid: state.user.uid,
+      });
+      await remove(ref(db, `roles/pendingBlocked/${key}`));
+    } else {
+      await set(ref(db, `roles/pendingBlocked/${key}`), {
+        email,
+        blockedAt: serverTimestamp(),
+        blockedBy: who,
+        blockedByUid: state.user.uid,
+      });
+    }
+    toast(`Đã chặn: ${email}`);
+    const input = $('#block-user-email');
+    if (input) input.value = '';
+  } catch (e) {
+    toast('Chặn thất bại: ' + (e.message || e));
+  }
+}
+
+async function unblockUser(kind, key) {
+  if (!canManageUserBlocks()) {
+    toast('Chỉ admin hoặc root được bỏ chặn');
+    return;
+  }
+  if (!key) return;
+  if (!confirm('Bỏ chặn tài khoản này?')) return;
+  try {
+    if (kind === 'pending') {
+      await remove(ref(db, `roles/pendingBlocked/${key}`));
+    } else {
+      await remove(ref(db, `roles/blocked/${key}`));
+    }
+    toast('Đã bỏ chặn');
+  } catch (e) {
+    toast('Bỏ chặn thất bại: ' + (e.message || e));
+  }
 }
 
 async function grantAdmin(emailRaw) {
@@ -1596,6 +1960,7 @@ function startAuth() {
       state.sheetMode = null;
       stopRunHistoryListener();
       stopRolesListener();
+      stopUsersListener();
     }
     render();
   });

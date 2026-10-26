@@ -18,7 +18,7 @@
       href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700&family=Sora:wght@600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="css/app.css?v=29" />
+    <link rel="stylesheet" href="css/app.css?v=30" />
   </head>
   <body>
     <div id="boot-screen" class="boot-screen" role="status" aria-live="polite">
@@ -65,10 +65,30 @@
               <span>Hạ tầng Vĩnh Linh</span>
             </div>
 
-            <h2 class="auth-heading">Chào mừng trở lại</h2>
-            <p class="auth-subheading">Đăng nhập để tiếp tục quản lý trạm</p>
+            <h2 class="auth-heading" id="auth-heading">Chào mừng trở lại</h2>
+            <p class="auth-subheading" id="auth-subheading">Đăng nhập để tiếp tục quản lý trạm</p>
+
+            <div class="auth-tabs" role="tablist" aria-label="Chế độ xác thực">
+              <button type="button" class="auth-tab active" data-auth-mode="login" role="tab" aria-selected="true">
+                Đăng nhập
+              </button>
+              <button type="button" class="auth-tab" data-auth-mode="register" role="tab" aria-selected="false">
+                Đăng ký
+              </button>
+            </div>
 
             <form id="auth-form" class="auth-form" autocomplete="on">
+              <div class="field" id="auth-name-field" hidden>
+                <label for="auth-display-name">Họ tên</label>
+                <input
+                  id="auth-display-name"
+                  type="text"
+                  name="displayName"
+                  autocomplete="name"
+                  placeholder="Nguyễn Văn A"
+                  maxlength="80"
+                />
+              </div>
               <div class="field">
                 <label for="auth-email">Email công việc</label>
                 <input
@@ -97,6 +117,17 @@
                   </button>
                 </div>
               </div>
+              <div class="field" id="auth-confirm-field" hidden>
+                <label for="auth-password-confirm">Nhập lại mật khẩu</label>
+                <input
+                  id="auth-password-confirm"
+                  type="password"
+                  name="passwordConfirm"
+                  minlength="6"
+                  autocomplete="new-password"
+                  placeholder="Nhập lại mật khẩu"
+                />
+              </div>
 
               <div id="auth-error" class="auth-error" hidden role="alert"></div>
 
@@ -106,9 +137,20 @@
               </button>
             </form>
 
-            <p class="auth-footer">Tài khoản do quản trị viên cấp · Đồng bộ với G Hunter</p>
+            <p class="auth-footer">Tự đăng ký hoặc do quản trị viên cấp · Đồng bộ với G Hunter</p>
           </div>
         </section>
+      </div>
+    </div>
+
+    <div id="blocked-screen" class="blocked-screen" hidden role="alert">
+      <div class="blocked-card">
+        <div class="blocked-icon" aria-hidden="true">🚫</div>
+        <h1>Bạn đã bị chặn</h1>
+        <p>
+          Tài khoản của bạn không còn quyền xem dữ liệu trên hệ thống. Liên hệ quản trị viên nếu cần hỗ trợ.
+        </p>
+        <button type="button" class="btn" id="blocked-logout">Đăng xuất</button>
       </div>
     </div>
 
@@ -224,6 +266,24 @@
               </form>
               <div id="admin-list" class="admin-list"></div>
             </section>
+
+            <section id="user-moderation" class="admin-roles settings-card" hidden>
+              <div class="admin-roles-head">
+                <h3>Chặn người dùng</h3>
+                <p class="muted tiny">Admin/root: user bị chặn chỉ thấy thông báo, không xem dữ liệu.</p>
+              </div>
+              <form id="block-user-form" class="admin-grant-form">
+                <input
+                  id="block-user-email"
+                  type="email"
+                  required
+                  placeholder="email@congty.vn"
+                  autocomplete="off"
+                />
+                <button type="submit" class="btn admin-grant-btn btn-block-user">Chặn</button>
+              </form>
+              <div id="user-mod-list" class="admin-list"></div>
+            </section>
           </div>
         </section>
       </main>
@@ -233,13 +293,13 @@
           <span class="icon" aria-hidden="true">📡</span>
           Trạm
         </button>
-        <button type="button" class="nav-btn" data-tab="stats">
-          <span class="icon" aria-hidden="true">📊</span>
-          Thống kê
-        </button>
         <button type="button" class="nav-btn" data-tab="alerts">
           <span class="icon" aria-hidden="true">🔔</span>
           Cảnh báo
+        </button>
+        <button type="button" class="nav-btn" data-tab="stats">
+          <span class="icon" aria-hidden="true">📊</span>
+          Thống kê
         </button>
         <button type="button" class="nav-btn" data-tab="settings">
           <span class="icon" aria-hidden="true">⚙️</span>
@@ -350,6 +410,6 @@
       <button type="button" id="update-reload" class="btn update-banner-btn">Cập nhật ngay</button>
     </div>
 
-    <script type="module" src="js/app.js?v=29"></script>
+    <script type="module" src="js/app.js?v=30"></script>
   </body>
 </html>

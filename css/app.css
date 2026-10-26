@@ -673,6 +673,68 @@ body.is-auth {
   line-height: 1.4;
 }
 
+.blocked-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: linear-gradient(160deg, #1a2430 0%, #0c1a28 55%, #142032 100%);
+}
+
+.blocked-screen[hidden] {
+  display: none !important;
+}
+
+.blocked-card {
+  max-width: 380px;
+  width: 100%;
+  text-align: center;
+  color: #e8eef4;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  padding: 28px 22px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+
+.blocked-icon {
+  font-size: 2rem;
+  margin-bottom: 10px;
+}
+
+.blocked-card h1 {
+  margin: 0 0 10px;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.blocked-card p {
+  margin: 0 0 20px;
+  color: #b7c5d4;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.blocked-card .btn {
+  min-width: 140px;
+}
+
+.btn-block-user {
+  background: #b42318 !important;
+  border-color: #b42318 !important;
+}
+
+.btn-block-user:hover {
+  background: #912018 !important;
+}
+
+body.is-blocked {
+  padding-bottom: 0;
+}
+
 @keyframes authFadeUp {
   from {
     opacity: 0;
