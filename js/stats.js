@@ -37,6 +37,30 @@ export function parseSmsDateTime(text) {
   return Number.isNaN(dt.getTime()) ? null : dt;
 }
 
+/** Khóa gom bản trùng: ưu tiên incidentKey / alertId+cửa sổ thời gian / start|end|phút. */
+export function runDedupeKey(ev, minutes) {
+  const incident = String(ev.incidentKey || '').trim();
+  if (incident) return `ik:${incident}`;
+  const alertId = String(ev.alertId || '').trim();
+  const start = String(ev.kpStartTime || ev.start || '').trim();
+  const end = String(ev.kpEndTime || ev.end || '').trim();
+  if (alertId) return `id:${alertId}|${start}|${end}`;
+  return `t:${start}|${end}|${minutes ?? 0}`;
+}
+
+/** Giữ bản mới nhất theo receivedAt cho mỗi khóa trùng. */
+export function dedupeRuns(rows) {
+  const map = new Map();
+  for (const r of rows) {
+    const key = r.dedupeKey || runDedupeKey(r, r.minutes);
+    const prev = map.get(key);
+    const score = r.receivedAt || r.at || r.sortAt || 0;
+    const prevScore = prev ? prev.receivedAt || prev.at || prev.sortAt || 0 : -1;
+    if (!prev || score >= prevScore) map.set(key, r);
+  }
+  return [...map.values()];
+}
+
 export function extractMayNoRuns(eventsMap) {
   const rows = [];
   for (const [id, ev] of Object.entries(eventsMap || {})) {
@@ -44,20 +68,28 @@ export function extractMayNoRuns(eventsMap) {
     const device = String(ev.deviceType || '');
     if (!device.toUpperCase().includes('MAY_NO')) continue;
     if (String(ev.type || '').toUpperCase() !== 'KP') continue;
-    const minutes = runDurationMinutes(ev);
+    const minutes = runDurationMinutes(ev) ?? 0;
     const endDt = parseSmsDateTime(ev.kpEndTime) || parseSmsDateTime(ev.kpStartTime);
     const receivedAt = toNum(ev.receivedAt) || 0;
     const at = endDt ? endDt.getTime() : receivedAt;
+    const start = ev.kpStartTime || '--';
+    const end = ev.kpEndTime || '--';
     rows.push({
       id,
-      start: ev.kpStartTime || '--',
-      end: ev.kpEndTime || '--',
-      minutes: minutes ?? 0,
+      alertId: ev.alertId || '',
+      incidentKey: ev.incidentKey || '',
+      start,
+      end,
+      minutes,
       at,
       receivedAt,
+      dedupeKey: runDedupeKey(
+        { incidentKey: ev.incidentKey, alertId: ev.alertId, kpStartTime: start, kpEndTime: end },
+        minutes
+      ),
     });
   }
-  return rows;
+  return dedupeRuns(rows);
 }
 
 export function fuelTypeLabel(type) {

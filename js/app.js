@@ -23,7 +23,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=24';
+} from './config.js?v=25';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -31,14 +31,14 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=24';
+} from './forecast.js?v=25';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=24';
+} from './stats.js?v=25';
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -738,42 +738,17 @@ function renderAdminRoles() {
     .join('');
 }
 
-function parseDurationToken(token) {
-  if (!token || typeof token !== 'string') return null;
-  const m = token.trim().match(/^(\d+)\s*p$/i);
-  return m ? Number(m[1]) : null;
-}
-
-function runDurationMinutes(ev) {
-  const effective = toNum(ev.durationMinutesEffective);
-  if (effective != null && effective >= 0) return effective;
-  const fromRange = toNum(ev.durationMinutesFromRange);
-  if (fromRange != null && fromRange >= 0) return fromRange;
-  return parseDurationToken(ev.durationToken);
-}
-
 function buildRunHistory(eventsMap, station) {
-  const rows = [];
-  const events = Object.entries(eventsMap || {}).map(([id, ev]) => ({ id, ...(ev || {}) }));
-
-  for (const ev of events) {
-    const device = String(ev.deviceType || '');
-    if (!device.toUpperCase().includes('MAY_NO')) continue;
-    if (String(ev.type || '').toUpperCase() !== 'KP') continue;
-    const minutes = runDurationMinutes(ev);
-    const start = ev.kpStartTime || '--';
-    const end = ev.kpEndTime || '--';
-    const sortAt = toNum(ev.receivedAt) || 0;
-    rows.push({
-      id: ev.id,
-      active: false,
-      start,
-      end,
-      minutes,
-      sortAt,
-      label: 'Đã chạy',
-    });
-  }
+  const rows = extractMayNoRuns(eventsMap).map((r) => ({
+    id: r.id,
+    active: false,
+    start: r.start,
+    end: r.end,
+    minutes: r.minutes,
+    sortAt: r.at || r.receivedAt || 0,
+    receivedAt: r.receivedAt || 0,
+    label: 'Đã chạy',
+  }));
 
   if (station?.mayNoLastAlertType === 'SC' && station.mayNoScAtMillis > 0) {
     const status = station.deviceStatus?.MAY_NO_EAS || {};
@@ -786,6 +761,7 @@ function buildRunHistory(eventsMap, station) {
       end: 'đang chạy',
       minutes: activeMin,
       sortAt: station.mayNoScAtMillis,
+      receivedAt: station.mayNoScAtMillis,
       label: 'Đang chạy',
     });
   }
