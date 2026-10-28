@@ -1135,6 +1135,36 @@ main {
   color: var(--primary-dark);
 }
 
+.sheet-mode-badge.is-station {
+  background: #fff1e0;
+  color: #9a4d00;
+}
+
+.sheet-actions-split {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.station-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.station-footer .btn-text.danger {
+  padding: 7px 10px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  min-height: 34px;
+  border-radius: 8px;
+  border: 1px solid #f0c2c2;
+  background: #fff5f5;
+}
+
 .card {
   background: var(--surface);
   border-radius: var(--radius);

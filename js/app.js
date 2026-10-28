@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=36';
+} from './config.js?v=37';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=36';
+} from './forecast.js?v=37';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=36';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=36';
+} from './stats.js?v=37';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=37';
 
 const app = initializeApp(firebaseConfig);
 // Persist session (IndexedDB → localStorage) so PWA/standalone không mất đăng nhập mỗi lần mở.
@@ -71,7 +71,7 @@ const state = {
   query: '',
   alertTab: 0,
   selectedKey: null,
-  /** null | 'edit' | 'lock' | 'history' */
+  /** null | 'edit' | 'lock' | 'station' | 'history' */
   sheetMode: null,
   tick: Date.now(),
   stationsBound: false,
@@ -138,6 +138,11 @@ function canManageRunHistory() {
 }
 
 function canManageUserBlocks() {
+  return isPrivilegedUser();
+}
+
+/** Admin/root: sửa thông tin trạm hoặc xóa trạm. */
+function canManageStations() {
   return isPrivilegedUser();
 }
 
@@ -872,6 +877,15 @@ function renderStations() {
             s.stationKey
           )}">Chi tiết</button>`
         : '';
+      const adminBtns = canManageStations()
+        ? `<button type="button" class="btn-outline station-action-btn" data-action="station" data-key="${escapeAttr(
+            s.stationKey
+          )}">Sửa trạm</button>
+           <button type="button" class="btn-text danger station-action-btn" data-action="delete" data-key="${escapeAttr(
+             s.stationKey
+           )}">Xóa</button>`
+        : '';
+      const footerBtns = [historyBtn, adminBtns].filter(Boolean).join('');
       return `<article class="station-card ${fuelClass}${active ? ' is-sc' : ''}" data-key="${escapeAttr(
         s.stationKey
       )}" style="--i:${index}">
@@ -929,8 +943,8 @@ function renderStations() {
           </div>
         </div>
         ${
-          historyBtn
-            ? `<div class="station-footer">${historyBtn}</div>`
+          footerBtns
+            ? `<div class="station-footer">${footerBtns}</div>`
             : ''
         }
       </article>`;
@@ -1302,6 +1316,14 @@ function openStationSheet(stationKey, mode) {
     toast('Chỉ admin hoặc root được xem/sửa lịch sử chạy máy');
     return;
   }
+  if ((mode === 'station' || mode === 'delete') && !canManageStations()) {
+    toast('Chỉ admin hoặc root được sửa/xóa trạm');
+    return;
+  }
+  if (mode === 'delete') {
+    deleteStation(stationKey);
+    return;
+  }
   state.selectedKey = stationKey;
   state.sheetMode = mode;
   const sheet = $('#detail-sheet');
@@ -1360,6 +1382,7 @@ function renderDetail() {
   const backdrop = $('#sheet-backdrop');
   const editPanel = $('#detail-edit-panel');
   const lockPanel = $('#detail-lock-panel');
+  const stationPanel = $('#detail-station-panel');
   const historyPanel = $('#detail-history-panel');
   if (!state.selectedKey || !state.sheetMode) {
     sheet.hidden = true;
@@ -1378,21 +1401,36 @@ function renderDetail() {
   }
   const isEdit = state.sheetMode === 'edit';
   const isLock = state.sheetMode === 'lock';
+  const isStation = state.sheetMode === 'station';
   const isHistory = state.sheetMode === 'history';
   sheet.hidden = false;
   backdrop.hidden = false;
   editPanel.hidden = !isEdit;
   if (lockPanel) lockPanel.hidden = !isLock;
+  if (stationPanel) stationPanel.hidden = !isStation;
   historyPanel.hidden = !isHistory;
   sheet.setAttribute(
     'aria-label',
-    isEdit ? 'Cập nhật MN' : isLock ? 'Cập nhật mã khóa' : 'Chi tiết trạm'
+    isEdit
+      ? 'Cập nhật MN'
+      : isLock
+        ? 'Cập nhật mã khóa'
+        : isStation
+          ? 'Sửa thông tin trạm'
+          : 'Chi tiết trạm'
   );
   const badge = $('#detail-mode-badge');
   if (badge) {
-    badge.textContent = isEdit ? 'Cập nhật MN' : isLock ? 'Mã khóa' : 'Chi tiết';
+    badge.textContent = isEdit
+      ? 'Cập nhật MN'
+      : isLock
+        ? 'Mã khóa'
+        : isStation
+          ? 'Sửa trạm'
+          : 'Chi tiết';
     badge.classList.toggle('is-history', isHistory);
     badge.classList.toggle('is-lock', isLock);
+    badge.classList.toggle('is-station', isStation);
   }
   $('#detail-title').textContent = s.profile.maTram || s.stationKey;
   $('#detail-subtitle').textContent = s.profile.tenTram || '—';
@@ -1435,6 +1473,23 @@ function renderDetail() {
     }
     const cshtEl = $('#detail-lock-csht');
     if (cshtEl) cshtEl.textContent = s.profile.maCsht || '—';
+  }
+
+  if (isStation) {
+    if (!sheet.dataset.bound || sheet.dataset.key !== s.stationKey || sheet.dataset.mode !== 'station') {
+      const keyEl = $('#f-station-key');
+      if (keyEl) keyEl.textContent = s.stationKey;
+      $('#f-ma-tram').value = s.profile.maTram || s.stationKey;
+      $('#f-ten-tram').value = s.profile.tenTram || '';
+      $('#f-dia-chi').value = s.profile.diaChi || '';
+      $('#f-ma-csht').value = s.profile.maCsht || '';
+      $('#f-ma-khoa').value = s.profile.maKhoaTram || '';
+      $('#f-ten-csht').value = s.profile.tenCsht || '';
+      $('#f-station-generator').value = s.profile.generatorName || '';
+      sheet.dataset.key = s.stationKey;
+      sheet.dataset.mode = 'station';
+      sheet.dataset.bound = '1';
+    }
   }
 
   if (isHistory) {
@@ -1502,6 +1557,71 @@ async function dismissAlert(stationKey, deviceType) {
       updatedAt: serverTimestamp(),
     });
     toast('Đã xóa cảnh báo');
+  } catch (e) {
+    toast('Xóa thất bại: ' + (e.message || e));
+  }
+}
+
+async function saveStationInfo() {
+  if (!canManageStations()) {
+    toast('Chỉ admin hoặc root được sửa trạm');
+    return;
+  }
+  const key = state.selectedKey;
+  if (!key || !state.user) return;
+  const who = currentUserLabel();
+  const updates = {
+    maTram: ($('#f-ma-tram')?.value || '').trim() || key,
+    tenTram: ($('#f-ten-tram')?.value || '').trim() || null,
+    diaChi: ($('#f-dia-chi')?.value || '').trim() || null,
+    maCsht: ($('#f-ma-csht')?.value || '').trim() || null,
+    maKhoaTram: ($('#f-ma-khoa')?.value || '').trim() || null,
+    tenCsht: ($('#f-ten-csht')?.value || '').trim() || null,
+    generatorName: ($('#f-station-generator')?.value || '').trim() || null,
+    updatedAt: serverTimestamp(),
+    lastEditedBy: who,
+    lastEditedByUid: state.user.uid,
+    lastEditedAt: serverTimestamp(),
+  };
+  try {
+    await update(ref(db, `stations/${key}/profile`), updates);
+    const sheet = $('#detail-sheet');
+    if (sheet) sheet.dataset.bound = '';
+    toast('Đã lưu thông tin trạm');
+    state.selectedKey = null;
+    state.sheetMode = null;
+    render();
+  } catch (e) {
+    toast('Lưu thất bại: ' + (e.message || e));
+  }
+}
+
+async function deleteStation(stationKey) {
+  if (!canManageStations()) {
+    toast('Chỉ admin hoặc root được xóa trạm');
+    return;
+  }
+  const key = stationKey || state.selectedKey;
+  if (!key) return;
+  const s = state.stations.find((x) => x.stationKey === key);
+  const label = s?.profile?.maTram || key;
+  if (
+    !confirm(
+      `Xóa trạm ${label}?\n\nSẽ xóa toàn bộ profile, cảnh báo, thống kê và lịch sử chạy máy.\nThao tác không hoàn tác được.`
+    )
+  ) {
+    return;
+  }
+  if (!confirm(`Xác nhận lần nữa: xóa hẳn ${label}?`)) return;
+  try {
+    await remove(ref(db, `stations/${key}`));
+    if (state.selectedKey === key) {
+      state.selectedKey = null;
+      state.sheetMode = null;
+      stopRunHistoryListener();
+    }
+    toast('Đã xóa trạm');
+    render();
   } catch (e) {
     toast('Xóa thất bại: ' + (e.message || e));
   }
@@ -1677,6 +1797,8 @@ function bindEvents() {
     const action = btn.dataset.action;
     if (action === 'edit') openStationSheet(key, 'edit');
     else if (action === 'lock') openStationSheet(key, 'lock');
+    else if (action === 'station') openStationSheet(key, 'station');
+    else if (action === 'delete') openStationSheet(key, 'delete');
     else if (action === 'history') openStationSheet(key, 'history');
   });
 
@@ -1744,6 +1866,10 @@ function bindEvents() {
   $('#detail-close').addEventListener('click', closeDetail);
   $('#detail-save').addEventListener('click', saveStation);
   $('#detail-save-lock')?.addEventListener('click', saveLockCode);
+  $('#detail-save-station')?.addEventListener('click', saveStationInfo);
+  $('#detail-delete-station')?.addEventListener('click', () => {
+    deleteStation(state.selectedKey);
+  });
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeDetail();

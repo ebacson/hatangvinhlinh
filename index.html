@@ -18,7 +18,7 @@
       href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700&family=Sora:wght@600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="css/app.css?v=36" />
+    <link rel="stylesheet" href="css/app.css?v=37" />
   </head>
   <body>
     <div id="boot-screen" class="boot-screen" role="status" aria-live="polite">
@@ -396,6 +396,51 @@
           </div>
         </div>
 
+        <div id="detail-station-panel" class="sheet-panel" hidden>
+          <section class="sheet-block">
+            <h3 class="sheet-block-title">Thông tin trạm</h3>
+            <div class="field-grid">
+              <div class="field field-span">
+                <label>Khóa hệ thống (RTDB)</label>
+                <p id="f-station-key" class="sheet-readonly">—</p>
+              </div>
+              <div class="field field-span">
+                <label for="f-ma-tram">Mã trạm (hiển thị)</label>
+                <input id="f-ma-tram" type="text" placeholder="VD: UL-VLH040M-QTI" maxlength="80" />
+              </div>
+              <div class="field field-span">
+                <label for="f-ten-tram">Tên site</label>
+                <input id="f-ten-tram" type="text" placeholder="Tên trên hệ thống / site" maxlength="160" />
+              </div>
+              <div class="field field-span">
+                <label for="f-dia-chi">Địa chỉ</label>
+                <input id="f-dia-chi" type="text" placeholder="Địa chỉ trạm" maxlength="240" />
+              </div>
+              <div class="field">
+                <label for="f-ma-csht">Mã CSHT</label>
+                <input id="f-ma-csht" type="text" placeholder="CSHT_QTI_xxxxx" maxlength="64" />
+              </div>
+              <div class="field">
+                <label for="f-ma-khoa">Mã khóa</label>
+                <input id="f-ma-khoa" type="text" placeholder="VD: 0123" maxlength="40" />
+              </div>
+              <div class="field field-span">
+                <label for="f-ten-csht">Tên CSHT</label>
+                <input id="f-ten-csht" type="text" placeholder="Tên CSHT" maxlength="160" />
+              </div>
+              <div class="field field-span">
+                <label for="f-station-generator">Tên máy nổ</label>
+                <input id="f-station-generator" type="text" placeholder="VD: Máy 1" maxlength="80" />
+              </div>
+            </div>
+            <p class="muted tiny">Chỉ admin/root. Xóa trạm sẽ xóa toàn bộ cảnh báo và lịch sử chạy của trạm này.</p>
+          </section>
+          <div class="sheet-actions sheet-actions-split">
+            <button type="button" class="btn-text danger" id="detail-delete-station">Xóa trạm</button>
+            <button type="button" class="btn sheet-save" id="detail-save-station">Lưu thông tin</button>
+          </div>
+        </div>
+
         <div id="detail-history-panel" class="sheet-panel" hidden>
           <section class="sheet-block">
             <div class="stat-grid stat-grid-2">
@@ -429,6 +474,6 @@
       <button type="button" id="update-reload" class="btn update-banner-btn">Cập nhật ngay</button>
     </div>
 
-    <script type="module" src="js/app.js?v=36"></script>
+    <script type="module" src="js/app.js?v=37"></script>
   </body>
 </html>
