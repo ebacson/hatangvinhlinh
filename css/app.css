@@ -1088,12 +1088,6 @@ main {
   overflow-wrap: anywhere;
 }
 
-.station-footer {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 8px;
-}
-
 .station-action-btn {
   flex: 0 0 auto;
   padding: 7px 10px !important;
