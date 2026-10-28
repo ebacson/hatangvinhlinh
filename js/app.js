@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=32';
+} from './config.js?v=33';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=32';
+} from './forecast.js?v=33';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=32';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=32';
+} from './stats.js?v=33';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=33';
 
 const app = initializeApp(firebaseConfig);
 // Persist session (IndexedDB → localStorage) so PWA/standalone không mất đăng nhập mỗi lần mở.
@@ -201,6 +201,9 @@ function parseStation(key, raw) {
     profile: {
       tenTram: profile.tenTram || null,
       maTram: profile.maTram || null,
+      maCsht: profile.maCsht || null,
+      maKhoaTram: profile.maKhoaTram || null,
+      tenCsht: profile.tenCsht || null,
       diaChi: profile.diaChi || null,
       generatorName: profile.generatorName || null,
       fuelType: profile.fuelType || null,
@@ -237,7 +240,9 @@ function filteredStations() {
     list = list.filter((s) => {
       const code = (s.profile.maTram || s.stationKey).toLowerCase();
       const name = (s.profile.tenTram || '').toLowerCase();
-      return code.includes(q) || name.includes(q);
+      const csht = (s.profile.maCsht || '').toLowerCase();
+      const khoa = (s.profile.maKhoaTram || '').toLowerCase();
+      return code.includes(q) || name.includes(q) || csht.includes(q) || khoa.includes(q);
     });
   }
   return [...list].sort((a, b) => {
@@ -846,6 +851,8 @@ function renderStations() {
     .map((s, index) => {
       const code = s.profile.maTram || s.stationKey;
       const name = s.profile.tenTram || 'Chưa có tên site';
+      const maCsht = (s.profile.maCsht || '').trim();
+      const maKhoa = (s.profile.maKhoaTram || '').trim();
       const generator = (s.profile.generatorName || '').trim();
       const addr = s.profile.diaChi || 'Chưa có địa chỉ';
       const predicted = stationForecast(s);
@@ -860,6 +867,14 @@ function renderStations() {
           : `${formatMinutes(lastMin)}${s.stats.lastKpAt ? ` · ${formatMillis(s.stats.lastKpAt)}` : ''}`;
       const genLabel = generator || 'chưa đặt tên';
       const active = s.mayNoLastAlertType === 'SC';
+      const cshtLine =
+        maCsht || maKhoa
+          ? `<p class="station-codes-line">
+              <span class="station-csht">CSHT: <strong>${escapeHtml(maCsht || '—')}</strong></span>
+              <span class="dot-sep" aria-hidden="true">·</span>
+              <span class="station-lock">Khóa: <strong>${escapeHtml(maKhoa || '—')}</strong></span>
+            </p>`
+          : '';
       return `<article class="station-card ${fuelClass}${active ? ' is-sc' : ''}" data-key="${escapeAttr(
         s.stationKey
       )}" style="--i:${index}">
@@ -871,6 +886,7 @@ function renderStations() {
               ${active ? '<span class="badge badge-sc">SC</span>' : ''}
             </div>
             <p class="station-name">${escapeHtml(name)}</p>
+            ${cshtLine}
             <p class="station-meta-line">
               <span class="station-generator">Máy: <strong>${escapeHtml(genLabel)}</strong></span>
               <span class="dot-sep" aria-hidden="true">·</span>

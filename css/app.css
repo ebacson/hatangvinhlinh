@@ -999,6 +999,23 @@ main {
   overflow: hidden;
 }
 
+.station-codes-line {
+  margin: 0 0 2px;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: #3d5a73;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: baseline;
+}
+
+.station-codes-line strong {
+  font-weight: 700;
+  color: #1a3a52;
+  letter-spacing: 0.01em;
+}
+
 .station-meta-line,
 .station-stats-line {
   margin: 0;
