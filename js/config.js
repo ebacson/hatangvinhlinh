@@ -1,7 +1,7 @@
 /** GitHub Pages base path (repo name). Local file:// / custom domain: set to ''. */
 export const BASE = '/hatangvinhlinh';
 /** Bump when shipping UI so Android PWA cache can be verified. */
-export const APP_VERSION = '38';
+export const APP_VERSION = '39';
 
 /** Root duy nhất — được xóa cảnh báo và cấp quyền admin. */
 export const ROOT_EMAIL = 'ebacson@gmail.com';
@@ -20,6 +20,7 @@ export const ALERT_TABS = [
   { id: 'POWER_AC_EAS', title: 'Mất AC', showFuel: false },
   { id: 'POWER_DC_EAS', title: 'DC thấp', showFuel: false },
   { id: 'SITE_OOS', title: 'Mất LL', showFuel: false },
+  { id: 'CELL_OOS', title: 'Cell OOS', showFuel: false },
 ];
 
 export const LONG_RUN_MS = 8 * 60 * 60 * 1000;
