@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=42';
+} from './config.js?v=43';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=42';
+} from './forecast.js?v=43';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=42';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=42';
+} from './stats.js?v=43';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=43';
 
 const app = initializeApp(firebaseConfig);
 // Persist session (IndexedDB → localStorage) so PWA/standalone không mất đăng nhập mỗi lần mở.
@@ -926,7 +926,7 @@ function renderStations() {
             </div>
             <button type="button" class="btn-outline station-action-btn" data-action="lock" data-key="${escapeAttr(
               s.stationKey
-            )}">Cập nhật Mã Khóa</button>
+            )}">Cập nhật MK</button>
           </div>
           <div class="station-kv-row station-kv-action">
             <div class="station-kv-text">
