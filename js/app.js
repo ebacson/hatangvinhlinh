@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=40';
+} from './config.js?v=41';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=40';
+} from './forecast.js?v=41';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=40';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=40';
+} from './stats.js?v=41';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=41';
 
 const app = initializeApp(firebaseConfig);
 // Persist session (IndexedDB → localStorage) so PWA/standalone không mất đăng nhập mỗi lần mở.
@@ -258,15 +258,17 @@ function filteredStations() {
   });
 }
 
-function activeAlerts(deviceType) {
-  const key = sanitizeKey(deviceType);
-  return state.stations
-    .map((s) => {
+function activeAlerts(deviceTypes) {
+  const types = Array.isArray(deviceTypes) ? deviceTypes : [deviceTypes];
+  const rows = [];
+  for (const s of state.stations) {
+    for (const deviceType of types) {
+      const key = sanitizeKey(deviceType);
       const status = s.deviceStatus[key] || s.deviceStatus[deviceType];
-      if (!status || status.lastAlertType !== 'SC') return null;
+      if (!status || status.lastAlertType !== 'SC') continue;
       const scAt = toNum(status.scAtMillis);
       const updatedAt = toNum(status.updatedAt) || 0;
-      return {
+      rows.push({
         stationKey: s.stationKey,
         maTram: s.profile.maTram || s.stationKey,
         tenTram: s.profile.tenTram || '',
@@ -278,10 +280,17 @@ function activeAlerts(deviceType) {
         stats: s.stats,
         clearedBy: status.clearedBy || null,
         deviceType,
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => a.maTram.localeCompare(b.maTram, 'vi'));
+      });
+    }
+  }
+  return rows.sort((a, b) => a.maTram.localeCompare(b.maTram, 'vi'));
+}
+
+function deviceTypeShortLabel(deviceType) {
+  const t = String(deviceType || '').toUpperCase();
+  if (t === 'CELL_OOS') return 'CELL';
+  if (t === 'SITE_OOS') return 'SITE';
+  return '';
 }
 
 function editorLine(profile) {
@@ -955,6 +964,7 @@ function renderStations() {
 }
 
 function renderAlerts() {
+  if (state.alertTab >= ALERT_TABS.length) state.alertTab = 0;
   const tabs = $('#alert-tabs');
   tabs.innerHTML = ALERT_TABS.map(
     (t, i) =>
@@ -964,7 +974,9 @@ function renderAlerts() {
   ).join('');
 
   const cfg = ALERT_TABS[state.alertTab];
-  const alerts = activeAlerts(cfg.id);
+  const types = cfg.deviceTypes || [cfg.id];
+  const alerts = activeAlerts(types);
+  const multiType = types.length > 1;
   const root = $('#alerts-list');
   const empty = $('#alerts-empty');
   if (!alerts.length) {
@@ -984,6 +996,10 @@ function renderAlerts() {
       const warn = overLong || lowFuel;
       const when = (a.scEventTime && a.scEventTime.trim()) || formatMillis(a.alertAt);
       const ago = a.alertAt > 0 ? formatDuration(runningMs) : '--';
+      const typeLabel = multiType ? deviceTypeShortLabel(a.deviceType) : '';
+      const typeBadge = typeLabel
+        ? `<span class="badge badge-device">${escapeHtml(typeLabel)}</span>`
+        : '';
       const fuelLine =
         !cfg.showFuel
           ? ''
@@ -1010,7 +1026,7 @@ function renderAlerts() {
       const dismissBtn = canDismissAlerts()
         ? `<button type="button" class="btn-text danger" data-dismiss="${escapeAttr(
             a.stationKey
-          )}" data-device="${escapeAttr(cfg.id)}">Xóa</button>`
+          )}" data-device="${escapeAttr(a.deviceType)}">Xóa</button>`
         : '';
       const actions =
         detailBtn || dismissBtn
@@ -1019,6 +1035,7 @@ function renderAlerts() {
       return `<article class="card alert-card ${warn ? 'is-warn' : ''}">
         <div class="card-title-row">
           <h3>${escapeHtml(a.maTram)} · ${escapeHtml(a.tenTram)}</h3>
+          ${typeBadge}
           ${warnBtn}
         </div>
         <p class="muted ${warn ? 'danger' : ''}">Lúc: ${escapeHtml(when)} · ${escapeHtml(ago)}</p>

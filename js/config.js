@@ -1,7 +1,7 @@
 /** GitHub Pages base path (repo name). Local file:// / custom domain: set to ''. */
 export const BASE = '/hatangvinhlinh';
 /** Bump when shipping UI so Android PWA cache can be verified. */
-export const APP_VERSION = '40';
+export const APP_VERSION = '41';
 
 /** Root duy nhất — được xóa cảnh báo và cấp quyền admin. */
 export const ROOT_EMAIL = 'ebacson@gmail.com';
@@ -16,11 +16,15 @@ export const firebaseConfig = {
 };
 
 export const ALERT_TABS = [
-  { id: 'MAY_NO_EAS', title: 'Máy nổ', showFuel: true },
-  { id: 'POWER_AC_EAS', title: 'Mất AC', showFuel: false },
-  { id: 'POWER_DC_EAS', title: 'DC thấp', showFuel: false },
-  { id: 'SITE_OOS', title: 'Mất LL', showFuel: false },
-  { id: 'CELL_OOS', title: 'Cell OOS', showFuel: false },
+  { id: 'MAY_NO_EAS', title: 'Máy nổ', showFuel: true, deviceTypes: ['MAY_NO_EAS'] },
+  { id: 'POWER_AC_EAS', title: 'Mất AC', showFuel: false, deviceTypes: ['POWER_AC_EAS'] },
+  { id: 'POWER_DC_EAS', title: 'DC thấp', showFuel: false, deviceTypes: ['POWER_DC_EAS'] },
+  {
+    id: 'SITE_MLL',
+    title: 'CELL/SITE MLL',
+    showFuel: false,
+    deviceTypes: ['SITE_OOS', 'CELL_OOS'],
+  },
 ];
 
 export const LONG_RUN_MS = 8 * 60 * 60 * 1000;
