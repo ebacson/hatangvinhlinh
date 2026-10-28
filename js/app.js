@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=35';
+} from './config.js?v=36';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=35';
+} from './forecast.js?v=36';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=35';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=35';
+} from './stats.js?v=36';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=36';
 
 const app = initializeApp(firebaseConfig);
 // Persist session (IndexedDB → localStorage) so PWA/standalone không mất đăng nhập mỗi lần mở.
@@ -876,50 +876,63 @@ function renderStations() {
         s.stationKey
       )}" style="--i:${index}">
         <div class="station-accent" aria-hidden="true"></div>
-        <div class="station-row-main">
-          <div class="station-main">
-            <div class="station-id">
-              <span class="station-code">${escapeHtml(code)}</span>
-              ${active ? '<span class="badge badge-sc">SC</span>' : ''}
-            </div>
-            <p class="station-name">${escapeHtml(name)}</p>
-            <div class="station-inline-row">
-              <p class="station-codes-line">
-                <span class="station-csht">CSHT: <strong>${escapeHtml(maCsht || '—')}</strong></span>
-                <span class="dot-sep" aria-hidden="true">·</span>
-                <span class="station-lock">Khóa: <strong>${escapeHtml(maKhoa || '—')}</strong></span>
-              </p>
-              <button type="button" class="btn-outline station-action-btn" data-action="lock" data-key="${escapeAttr(
-                s.stationKey
-              )}">Cập nhật Mã Khóa</button>
-            </div>
-            <div class="station-inline-row">
-              <p class="station-meta-line">
-                <span class="station-generator">Máy: <strong>${escapeHtml(genLabel)}</strong></span>
-                <span class="dot-sep" aria-hidden="true">·</span>
-                <span class="station-addr">${escapeHtml(addr)}</span>
-              </p>
-              <button type="button" class="btn-outline station-action-btn" data-action="edit" data-key="${escapeAttr(
-                s.stationKey
-              )}">Cập nhật MN</button>
-            </div>
-            <div class="station-inline-row station-inline-stats">
-              <p class="station-stats-line">
-                Đã chạy ${escapeHtml(since)}
-                <span class="dot-sep" aria-hidden="true">·</span>
-                Tổng ${escapeHtml(total)}
-                <span class="dot-sep" aria-hidden="true">·</span>
-                Gần nhất ${escapeHtml(last)}
-              </p>
-              ${historyBtn}
-            </div>
+        <header class="station-top">
+          <div class="station-id">
+            <span class="station-code">${escapeHtml(code)}</span>
+            ${active ? '<span class="badge badge-sc">SC</span>' : ''}
           </div>
-          <div class="station-side">
-            <div class="station-fuel ${fuelClass}" title="Dự báo nhiên liệu">
-              <span class="fuel-value">${escapeHtml(fuelLabel)}</span>
+          <div class="station-fuel ${fuelClass}" title="Dự báo nhiên liệu">
+            <span class="fuel-label">NL</span>
+            <span class="fuel-value">${escapeHtml(fuelLabel)}</span>
+          </div>
+        </header>
+        <p class="station-name">${escapeHtml(name)}</p>
+        <p class="station-addr">${escapeHtml(addr)}</p>
+
+        <div class="station-kv">
+          <div class="station-kv-row">
+            <span class="station-kv-l">CSHT</span>
+            <strong class="station-kv-v">${escapeHtml(maCsht || '—')}</strong>
+          </div>
+          <div class="station-kv-row station-kv-action">
+            <div class="station-kv-text">
+              <span class="station-kv-l">Mã khóa</span>
+              <strong class="station-kv-v">${escapeHtml(maKhoa || '—')}</strong>
             </div>
+            <button type="button" class="btn-outline station-action-btn" data-action="lock" data-key="${escapeAttr(
+              s.stationKey
+            )}">Cập nhật Mã Khóa</button>
+          </div>
+          <div class="station-kv-row station-kv-action">
+            <div class="station-kv-text">
+              <span class="station-kv-l">Máy</span>
+              <strong class="station-kv-v">${escapeHtml(genLabel)}</strong>
+            </div>
+            <button type="button" class="btn-outline station-action-btn" data-action="edit" data-key="${escapeAttr(
+              s.stationKey
+            )}">Cập nhật MN</button>
           </div>
         </div>
+
+        <div class="station-metrics">
+          <div class="station-metric">
+            <span class="station-metric-l">Đã chạy</span>
+            <strong>${escapeHtml(since)}</strong>
+          </div>
+          <div class="station-metric">
+            <span class="station-metric-l">Tổng</span>
+            <strong>${escapeHtml(total)}</strong>
+          </div>
+          <div class="station-metric station-metric-wide">
+            <span class="station-metric-l">Gần nhất</span>
+            <strong>${escapeHtml(last)}</strong>
+          </div>
+        </div>
+        ${
+          historyBtn
+            ? `<div class="station-footer">${historyBtn}</div>`
+            : ''
+        }
       </article>`;
     })
     .join('');
