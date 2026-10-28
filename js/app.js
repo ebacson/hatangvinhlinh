@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=33';
+} from './config.js?v=34';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=33';
+} from './forecast.js?v=34';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=33';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=33';
+} from './stats.js?v=34';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=34';
 
 const app = initializeApp(firebaseConfig);
 // Persist session (IndexedDB → localStorage) so PWA/standalone không mất đăng nhập mỗi lần mở.
@@ -71,7 +71,7 @@ const state = {
   query: '',
   alertTab: 0,
   selectedKey: null,
-  /** null | 'edit' | 'history' */
+  /** null | 'edit' | 'lock' | 'history' */
   sheetMode: null,
   tick: Date.now(),
   stationsBound: false,
@@ -907,7 +907,10 @@ function renderStations() {
             <div class="station-actions">
               <button type="button" class="btn-outline station-action-btn" data-action="edit" data-key="${escapeAttr(
                 s.stationKey
-              )}">Cập nhật</button>
+              )}">Cập nhật MN</button>
+              <button type="button" class="btn-outline station-action-btn" data-action="lock" data-key="${escapeAttr(
+                s.stationKey
+              )}">Cập nhật Mã Khóa</button>
               ${
                 canManageRunHistory()
                   ? `<button type="button" class="btn station-action-btn" data-action="history" data-key="${escapeAttr(
@@ -1344,6 +1347,7 @@ function renderDetail() {
   const sheet = $('#detail-sheet');
   const backdrop = $('#sheet-backdrop');
   const editPanel = $('#detail-edit-panel');
+  const lockPanel = $('#detail-lock-panel');
   const historyPanel = $('#detail-history-panel');
   if (!state.selectedKey || !state.sheetMode) {
     sheet.hidden = true;
@@ -1361,16 +1365,22 @@ function renderDetail() {
     return;
   }
   const isEdit = state.sheetMode === 'edit';
+  const isLock = state.sheetMode === 'lock';
   const isHistory = state.sheetMode === 'history';
   sheet.hidden = false;
   backdrop.hidden = false;
   editPanel.hidden = !isEdit;
+  if (lockPanel) lockPanel.hidden = !isLock;
   historyPanel.hidden = !isHistory;
-  sheet.setAttribute('aria-label', isEdit ? 'Cập nhật trạm' : 'Chi tiết trạm');
+  sheet.setAttribute(
+    'aria-label',
+    isEdit ? 'Cập nhật MN' : isLock ? 'Cập nhật mã khóa' : 'Chi tiết trạm'
+  );
   const badge = $('#detail-mode-badge');
   if (badge) {
-    badge.textContent = isEdit ? 'Cập nhật' : 'Chi tiết';
+    badge.textContent = isEdit ? 'Cập nhật MN' : isLock ? 'Mã khóa' : 'Chi tiết';
     badge.classList.toggle('is-history', isHistory);
+    badge.classList.toggle('is-lock', isLock);
   }
   $('#detail-title').textContent = s.profile.maTram || s.stationKey;
   $('#detail-subtitle').textContent = s.profile.tenTram || '—';
@@ -1400,6 +1410,19 @@ function renderDetail() {
     $('#detail-edited-at').textContent = s.profile.lastEditedAt
       ? formatMillis(s.profile.lastEditedAt)
       : '--';
+  }
+
+  if (isLock) {
+    if (!sheet.dataset.bound || sheet.dataset.key !== s.stationKey || sheet.dataset.mode !== 'lock') {
+      const lockInput = $('#f-lock-code');
+      if (lockInput) lockInput.value = s.profile.maKhoaTram || '';
+      sheet.dataset.initialLock = String(s.profile.maKhoaTram || '');
+      sheet.dataset.key = s.stationKey;
+      sheet.dataset.mode = 'lock';
+      sheet.dataset.bound = '1';
+    }
+    const cshtEl = $('#detail-lock-csht');
+    if (cshtEl) cshtEl.textContent = s.profile.maCsht || '—';
   }
 
   if (isHistory) {
@@ -1469,6 +1492,36 @@ async function dismissAlert(stationKey, deviceType) {
     toast('Đã xóa cảnh báo');
   } catch (e) {
     toast('Xóa thất bại: ' + (e.message || e));
+  }
+}
+
+async function saveLockCode() {
+  const key = state.selectedKey;
+  if (!key || !state.user) return;
+  const sheet = $('#detail-sheet');
+  const lockInput = $('#f-lock-code');
+  const next = (lockInput?.value || '').trim();
+  const prev = sheet?.dataset.initialLock || '';
+  if (next === prev) {
+    toast('Không có thay đổi');
+    return;
+  }
+  const who = currentUserLabel();
+  try {
+    await update(ref(db, `stations/${key}/profile`), {
+      maKhoaTram: next || null,
+      updatedAt: serverTimestamp(),
+      lastEditedBy: who,
+      lastEditedByUid: state.user.uid,
+      lastEditedAt: serverTimestamp(),
+    });
+    if (sheet) sheet.dataset.bound = '';
+    toast('Đã lưu mã khóa');
+    state.selectedKey = null;
+    state.sheetMode = null;
+    render();
+  } catch (e) {
+    toast('Lưu thất bại: ' + (e.message || e));
   }
 }
 
@@ -1611,6 +1664,7 @@ function bindEvents() {
     const key = btn.dataset.key;
     const action = btn.dataset.action;
     if (action === 'edit') openStationSheet(key, 'edit');
+    else if (action === 'lock') openStationSheet(key, 'lock');
     else if (action === 'history') openStationSheet(key, 'history');
   });
 
@@ -1677,6 +1731,7 @@ function bindEvents() {
   $('#sheet-backdrop').addEventListener('click', closeDetail);
   $('#detail-close').addEventListener('click', closeDetail);
   $('#detail-save').addEventListener('click', saveStation);
+  $('#detail-save-lock')?.addEventListener('click', saveLockCode);
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeDetail();

@@ -1046,22 +1046,40 @@ main {
 
 .station-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
   gap: 4px;
   margin: 0;
   padding: 0;
   border: 0;
+  max-width: 11.5rem;
 }
 
 .station-action-btn {
   flex: 0 0 auto;
   padding: 3px 8px !important;
-  font-size: 0.68rem !important;
+  font-size: 0.66rem !important;
   font-weight: 650;
   line-height: 1.2;
   border-radius: 6px;
   min-height: 0;
+  white-space: nowrap;
+}
+
+.sheet-readonly {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #eef3f8;
+  color: #3d5a73;
+  font-weight: 650;
+  font-size: 0.9rem;
+}
+
+.sheet-mode-badge.is-lock {
+  background: #e8f2fb;
+  color: var(--primary-dark);
 }
 
 .card {

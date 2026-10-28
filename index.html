@@ -18,7 +18,7 @@
       href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700&family=Sora:wght@600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="css/app.css?v=33" />
+    <link rel="stylesheet" href="css/app.css?v=34" />
   </head>
   <body>
     <div id="boot-screen" class="boot-screen" role="status" aria-live="polite">
@@ -311,7 +311,7 @@
         <div class="sheet-handle" aria-hidden="true"></div>
         <div class="sheet-header">
           <div class="sheet-heading">
-            <span id="detail-mode-badge" class="sheet-mode-badge">Cập nhật</span>
+            <span id="detail-mode-badge" class="sheet-mode-badge">Cập nhật MN</span>
             <h2 id="detail-title">Trạm</h2>
             <p id="detail-subtitle" class="sheet-sub"></p>
           </div>
@@ -376,6 +376,26 @@
           </div>
         </div>
 
+        <div id="detail-lock-panel" class="sheet-panel" hidden>
+          <section class="sheet-block">
+            <h3 class="sheet-block-title">Mã khóa trạm</h3>
+            <div class="field-grid">
+              <div class="field field-span">
+                <label for="f-lock-code">Mã khóa</label>
+                <input id="f-lock-code" type="text" placeholder="VD: 0123" maxlength="40" autocomplete="off" />
+              </div>
+              <div class="field field-span">
+                <label>Mã CSHT</label>
+                <p id="detail-lock-csht" class="sheet-readonly">—</p>
+              </div>
+            </div>
+            <p class="muted tiny">Chỉ cập nhật mã khóa cửa trạm. Mã CSHT chỉ xem.</p>
+          </section>
+          <div class="sheet-actions">
+            <button type="button" class="btn sheet-save" id="detail-save-lock">Lưu mã khóa</button>
+          </div>
+        </div>
+
         <div id="detail-history-panel" class="sheet-panel" hidden>
           <section class="sheet-block">
             <div class="stat-grid stat-grid-2">
@@ -409,6 +429,6 @@
       <button type="button" id="update-reload" class="btn update-banner-btn">Cập nhật ngay</button>
     </div>
 
-    <script type="module" src="js/app.js?v=33"></script>
+    <script type="module" src="js/app.js?v=34"></script>
   </body>
 </html>
