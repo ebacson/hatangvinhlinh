@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=39';
+} from './config.js?v=40';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=39';
+} from './forecast.js?v=40';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=39';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=39';
+} from './stats.js?v=40';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=40';
 
 const app = initializeApp(firebaseConfig);
 // Persist session (IndexedDB → localStorage) so PWA/standalone không mất đăng nhập mỗi lần mở.
@@ -272,6 +272,8 @@ function activeAlerts(deviceType) {
         tenTram: s.profile.tenTram || '',
         alertAt: scAt || updatedAt,
         scEventTime: status.scEventTime || null,
+        alarmCause: status.alarmCause || null,
+        alarmDetail: status.alarmDetail || null,
         profile: s.profile,
         stats: s.stats,
         clearedBy: status.clearedBy || null,
@@ -993,6 +995,27 @@ function renderAlerts() {
             JSON.stringify({ overLong, lowFuel })
           )}">!</button>`
         : '';
+      const hasDetail =
+        !!(a.alarmCause && String(a.alarmCause).trim()) ||
+        !!(a.alarmDetail && String(a.alarmDetail).trim());
+      const detailBtn = hasDetail
+        ? `<button type="button" class="btn-text" data-alarm-detail="${escapeAttr(
+            JSON.stringify({
+              cause: a.alarmCause || '',
+              detail: a.alarmDetail || '',
+              title: `${a.maTram} · ${a.tenTram}`,
+            })
+          )}">Chi tiết</button>`
+        : '';
+      const dismissBtn = canDismissAlerts()
+        ? `<button type="button" class="btn-text danger" data-dismiss="${escapeAttr(
+            a.stationKey
+          )}" data-device="${escapeAttr(cfg.id)}">Xóa</button>`
+        : '';
+      const actions =
+        detailBtn || dismissBtn
+          ? `<div class="row-actions">${detailBtn}${dismissBtn}</div>`
+          : '';
       return `<article class="card alert-card ${warn ? 'is-warn' : ''}">
         <div class="card-title-row">
           <h3>${escapeHtml(a.maTram)} · ${escapeHtml(a.tenTram)}</h3>
@@ -1000,15 +1023,7 @@ function renderAlerts() {
         </div>
         <p class="muted ${warn ? 'danger' : ''}">Lúc: ${escapeHtml(when)} · ${escapeHtml(ago)}</p>
         ${fuelLine}
-        ${
-          canDismissAlerts()
-            ? `<div class="row-actions">
-          <button type="button" class="btn-text danger" data-dismiss="${escapeAttr(a.stationKey)}" data-device="${escapeAttr(
-                cfg.id
-              )}">Xóa</button>
-        </div>`
-            : ''
-        }
+        ${actions}
       </article>`;
     })
     .join('');
@@ -1547,6 +1562,8 @@ async function dismissAlert(stationKey, deviceType) {
       clearedByUid: state.user.uid,
       scAtMillis: null,
       scEventTime: null,
+      alarmCause: null,
+      alarmDetail: null,
       updatedAt: serverTimestamp(),
     });
     await update(ref(db, `stations/${stationKey}/profile`), {
@@ -1825,6 +1842,14 @@ function bindEvents() {
     const dismiss = e.target.closest('[data-dismiss]');
     if (dismiss) {
       dismissAlert(dismiss.dataset.dismiss, dismiss.dataset.device);
+      return;
+    }
+    const detailBtn = e.target.closest('[data-alarm-detail]');
+    if (detailBtn) {
+      const info = JSON.parse(detailBtn.dataset.alarmDetail);
+      const cause = (info.cause && String(info.cause).trim()) || '—';
+      const detail = (info.detail && String(info.detail).trim()) || '—';
+      alert(`${info.title || 'Chi tiết cảnh báo'}\n\nNguyên nhân: ${cause}\n\nChi tiết: ${detail}`);
       return;
     }
     const warn = e.target.closest('[data-warn]');
