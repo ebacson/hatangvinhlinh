@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=34';
+} from './config.js?v=35';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=34';
+} from './forecast.js?v=35';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=34';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=34';
+} from './stats.js?v=35';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=35';
 
 const app = initializeApp(firebaseConfig);
 // Persist session (IndexedDB → localStorage) so PWA/standalone không mất đăng nhập mỗi lần mở.
@@ -867,14 +867,11 @@ function renderStations() {
           : `${formatMinutes(lastMin)}${s.stats.lastKpAt ? ` · ${formatMillis(s.stats.lastKpAt)}` : ''}`;
       const genLabel = generator || 'chưa đặt tên';
       const active = s.mayNoLastAlertType === 'SC';
-      const cshtLine =
-        maCsht || maKhoa
-          ? `<p class="station-codes-line">
-              <span class="station-csht">CSHT: <strong>${escapeHtml(maCsht || '—')}</strong></span>
-              <span class="dot-sep" aria-hidden="true">·</span>
-              <span class="station-lock">Khóa: <strong>${escapeHtml(maKhoa || '—')}</strong></span>
-            </p>`
-          : '';
+      const historyBtn = canManageRunHistory()
+        ? `<button type="button" class="btn station-action-btn" data-action="history" data-key="${escapeAttr(
+            s.stationKey
+          )}">Chi tiết</button>`
+        : '';
       return `<article class="station-card ${fuelClass}${active ? ' is-sc' : ''}" data-key="${escapeAttr(
         s.stationKey
       )}" style="--i:${index}">
@@ -886,38 +883,40 @@ function renderStations() {
               ${active ? '<span class="badge badge-sc">SC</span>' : ''}
             </div>
             <p class="station-name">${escapeHtml(name)}</p>
-            ${cshtLine}
-            <p class="station-meta-line">
-              <span class="station-generator">Máy: <strong>${escapeHtml(genLabel)}</strong></span>
-              <span class="dot-sep" aria-hidden="true">·</span>
-              <span class="station-addr">${escapeHtml(addr)}</span>
-            </p>
-            <p class="station-stats-line">
-              Đã chạy ${escapeHtml(since)}
-              <span class="dot-sep" aria-hidden="true">·</span>
-              Tổng ${escapeHtml(total)}
-              <span class="dot-sep" aria-hidden="true">·</span>
-              Gần nhất ${escapeHtml(last)}
-            </p>
+            <div class="station-inline-row">
+              <p class="station-codes-line">
+                <span class="station-csht">CSHT: <strong>${escapeHtml(maCsht || '—')}</strong></span>
+                <span class="dot-sep" aria-hidden="true">·</span>
+                <span class="station-lock">Khóa: <strong>${escapeHtml(maKhoa || '—')}</strong></span>
+              </p>
+              <button type="button" class="btn-outline station-action-btn" data-action="lock" data-key="${escapeAttr(
+                s.stationKey
+              )}">Cập nhật Mã Khóa</button>
+            </div>
+            <div class="station-inline-row">
+              <p class="station-meta-line">
+                <span class="station-generator">Máy: <strong>${escapeHtml(genLabel)}</strong></span>
+                <span class="dot-sep" aria-hidden="true">·</span>
+                <span class="station-addr">${escapeHtml(addr)}</span>
+              </p>
+              <button type="button" class="btn-outline station-action-btn" data-action="edit" data-key="${escapeAttr(
+                s.stationKey
+              )}">Cập nhật MN</button>
+            </div>
+            <div class="station-inline-row station-inline-stats">
+              <p class="station-stats-line">
+                Đã chạy ${escapeHtml(since)}
+                <span class="dot-sep" aria-hidden="true">·</span>
+                Tổng ${escapeHtml(total)}
+                <span class="dot-sep" aria-hidden="true">·</span>
+                Gần nhất ${escapeHtml(last)}
+              </p>
+              ${historyBtn}
+            </div>
           </div>
           <div class="station-side">
             <div class="station-fuel ${fuelClass}" title="Dự báo nhiên liệu">
               <span class="fuel-value">${escapeHtml(fuelLabel)}</span>
-            </div>
-            <div class="station-actions">
-              <button type="button" class="btn-outline station-action-btn" data-action="edit" data-key="${escapeAttr(
-                s.stationKey
-              )}">Cập nhật MN</button>
-              <button type="button" class="btn-outline station-action-btn" data-action="lock" data-key="${escapeAttr(
-                s.stationKey
-              )}">Cập nhật Mã Khóa</button>
-              ${
-                canManageRunHistory()
-                  ? `<button type="button" class="btn station-action-btn" data-action="history" data-key="${escapeAttr(
-                      s.stationKey
-                    )}">Chi tiết</button>`
-                  : ''
-              }
             </div>
           </div>
         </div>

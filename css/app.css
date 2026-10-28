@@ -999,8 +999,26 @@ main {
   overflow: hidden;
 }
 
+.station-inline-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 3px;
+  min-width: 0;
+}
+
+.station-inline-row > p {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.station-inline-stats {
+  margin-top: 1px;
+}
+
 .station-codes-line {
-  margin: 0 0 2px;
+  margin: 0;
   font-size: 0.72rem;
   line-height: 1.35;
   color: #3d5a73;
@@ -1029,7 +1047,6 @@ main {
 }
 
 .station-stats-line {
-  margin-top: 3px;
   color: #4a6278;
   font-weight: 550;
 }
@@ -1042,18 +1059,6 @@ main {
 .dot-sep {
   margin: 0 4px;
   opacity: 0.55;
-}
-
-.station-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 4px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  max-width: 11.5rem;
 }
 
 .station-action-btn {
