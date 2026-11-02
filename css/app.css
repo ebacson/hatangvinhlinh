@@ -977,15 +977,6 @@ main {
   color: #445066;
 }
 
-.chips-source {
-  margin-top: 8px;
-  margin-bottom: 4px;
-}
-
-.chip-source {
-  font-size: 0.78rem;
-}
-
 .station-fuel {
   flex-shrink: 0;
   text-align: right;
