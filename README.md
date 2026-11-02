@@ -14,7 +14,7 @@ https://ebacson.github.io/hatangvinhlinh/
 |--|--|
 | **Đăng nhập** | Email + mật khẩu (tài khoản tạo trên Firebase Console) |
 | **Trạm** | Tìm kiếm, dự báo nhiên liệu, cập nhật máy nổ; hiện *ai cập nhật* và *thời gian* |
-| **Cảnh báo** | 4 loại; badge **SMS** / **FMS** theo `lastSource`; lọc nguồn để so sánh; xóa cảnh báo sai (ghi tên người xóa) |
+| **Cảnh báo** | 4 loại; badge **SMS** / **FMS** theo `lastSource`; xóa cảnh báo sai (ghi tên người xóa) |
 
 ## Firebase Console (bắt buộc)
 

@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=44';
+} from './config.js?v=45';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=44';
+} from './forecast.js?v=45';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=44';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=44';
+} from './stats.js?v=45';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=45';
 
 const app = initializeApp(firebaseConfig);
 // Persist session (IndexedDB → localStorage) so PWA/standalone không mất đăng nhập mỗi lần mở.
@@ -70,8 +70,6 @@ const state = {
   stations: [],
   query: '',
   alertTab: 0,
-  /** 'all' | 'sms' | 'fms' — lọc nguồn cảnh báo để so sánh SMS vs service */
-  alertSourceFilter: 'all',
   selectedKey: null,
   /** null | 'edit' | 'lock' | 'station' | 'history' */
   sheetMode: null,
@@ -994,38 +992,14 @@ function renderAlerts() {
 
   const cfg = ALERT_TABS[state.alertTab];
   const types = cfg.deviceTypes || [cfg.id];
-  const allAlerts = activeAlerts(types);
-  const sourceFilter = state.alertSourceFilter || 'all';
-  const alerts =
-    sourceFilter === 'all' ? allAlerts : allAlerts.filter((a) => a.source === sourceFilter);
+  const alerts = activeAlerts(types);
   const multiType = types.length > 1;
-  const nSms = allAlerts.filter((a) => a.source === 'sms').length;
-  const nFms = allAlerts.filter((a) => a.source === 'fms').length;
-  const sourceFilters = $('#alert-source-filters');
-  if (sourceFilters) {
-    const opts = [
-      { id: 'all', label: `Tất cả (${allAlerts.length})` },
-      { id: 'sms', label: `SMS (${nSms})` },
-      { id: 'fms', label: `FMS (${nFms})` },
-    ];
-    sourceFilters.innerHTML = opts
-      .map(
-        (o) =>
-          `<button type="button" class="chip chip-source ${sourceFilter === o.id ? 'active' : ''}" data-alert-source="${
-            o.id
-          }">${escapeHtml(o.label)}</button>`
-      )
-      .join('');
-  }
   const root = $('#alerts-list');
   const empty = $('#alerts-empty');
   if (!alerts.length) {
     root.innerHTML = '';
     empty.hidden = false;
-    empty.textContent =
-      allAlerts.length && sourceFilter !== 'all'
-        ? `Không có cảnh báo nguồn ${sourceFilter === 'fms' ? 'FMS' : 'SMS'}.`
-        : 'Không có cảnh báo đang active.';
+    empty.textContent = 'Không có cảnh báo đang active.';
     return;
   }
   empty.hidden = true;
@@ -1901,15 +1875,6 @@ function bindEvents() {
     state.alertTab = Number(chip.dataset.alertTab);
     renderAlerts();
   });
-  const sourceFilterEl = $('#alert-source-filters');
-  if (sourceFilterEl) {
-    sourceFilterEl.addEventListener('click', (e) => {
-      const chip = e.target.closest('[data-alert-source]');
-      if (!chip) return;
-      state.alertSourceFilter = chip.dataset.alertSource || 'all';
-      renderAlerts();
-    });
-  }
 
   $('#alerts-list').addEventListener('click', (e) => {
     const dismiss = e.target.closest('[data-dismiss]');
