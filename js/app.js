@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=43';
+} from './config.js?v=44';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=43';
+} from './forecast.js?v=44';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=43';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=43';
+} from './stats.js?v=44';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=44';
 
 const app = initializeApp(firebaseConfig);
 // Persist session (IndexedDB → localStorage) so PWA/standalone không mất đăng nhập mỗi lần mở.
@@ -70,6 +70,8 @@ const state = {
   stations: [],
   query: '',
   alertTab: 0,
+  /** 'all' | 'sms' | 'fms' — lọc nguồn cảnh báo để so sánh SMS vs service */
+  alertSourceFilter: 'all',
   selectedKey: null,
   /** null | 'edit' | 'lock' | 'station' | 'history' */
   sheetMode: null,
@@ -258,6 +260,21 @@ function filteredStations() {
   });
 }
 
+function normalizeAlertSource(raw) {
+  const s = String(raw || '').trim().toLowerCase();
+  if (s === 'fms_crawl' || s === 'fms' || s === 'service') return 'fms';
+  if (s === 'sms') return 'sms';
+  // Android cũ không ghi lastSource → coi như SMS
+  return 'sms';
+}
+
+function alertSourceBadge(source) {
+  if (source === 'fms') {
+    return '<span class="badge badge-source badge-source-fms" title="Đẩy từ FMS service">FMS</span>';
+  }
+  return '<span class="badge badge-source badge-source-sms" title="Đẩy từ SMS Ghunter">SMS</span>';
+}
+
 function activeAlerts(deviceTypes) {
   const types = Array.isArray(deviceTypes) ? deviceTypes : [deviceTypes];
   const rows = [];
@@ -268,6 +285,7 @@ function activeAlerts(deviceTypes) {
       if (!status || status.lastAlertType !== 'SC') continue;
       const scAt = toNum(status.scAtMillis);
       const updatedAt = toNum(status.updatedAt) || 0;
+      const source = normalizeAlertSource(status.lastSource);
       rows.push({
         stationKey: s.stationKey,
         maTram: s.profile.maTram || s.stationKey,
@@ -280,6 +298,7 @@ function activeAlerts(deviceTypes) {
         stats: s.stats,
         clearedBy: status.clearedBy || null,
         deviceType,
+        source,
       });
     }
   }
@@ -975,13 +994,38 @@ function renderAlerts() {
 
   const cfg = ALERT_TABS[state.alertTab];
   const types = cfg.deviceTypes || [cfg.id];
-  const alerts = activeAlerts(types);
+  const allAlerts = activeAlerts(types);
+  const sourceFilter = state.alertSourceFilter || 'all';
+  const alerts =
+    sourceFilter === 'all' ? allAlerts : allAlerts.filter((a) => a.source === sourceFilter);
   const multiType = types.length > 1;
+  const nSms = allAlerts.filter((a) => a.source === 'sms').length;
+  const nFms = allAlerts.filter((a) => a.source === 'fms').length;
+  const sourceFilters = $('#alert-source-filters');
+  if (sourceFilters) {
+    const opts = [
+      { id: 'all', label: `Tất cả (${allAlerts.length})` },
+      { id: 'sms', label: `SMS (${nSms})` },
+      { id: 'fms', label: `FMS (${nFms})` },
+    ];
+    sourceFilters.innerHTML = opts
+      .map(
+        (o) =>
+          `<button type="button" class="chip chip-source ${sourceFilter === o.id ? 'active' : ''}" data-alert-source="${
+            o.id
+          }">${escapeHtml(o.label)}</button>`
+      )
+      .join('');
+  }
   const root = $('#alerts-list');
   const empty = $('#alerts-empty');
   if (!alerts.length) {
     root.innerHTML = '';
     empty.hidden = false;
+    empty.textContent =
+      allAlerts.length && sourceFilter !== 'all'
+        ? `Không có cảnh báo nguồn ${sourceFilter === 'fms' ? 'FMS' : 'SMS'}.`
+        : 'Không có cảnh báo đang active.';
     return;
   }
   empty.hidden = true;
@@ -1000,6 +1044,7 @@ function renderAlerts() {
       const typeBadge = typeLabel
         ? `<span class="badge badge-device">${escapeHtml(typeLabel)}</span>`
         : '';
+      const sourceBadge = alertSourceBadge(a.source);
       const fuelLine =
         !cfg.showFuel
           ? ''
@@ -1020,6 +1065,7 @@ function renderAlerts() {
               cause: a.alarmCause || '',
               detail: a.alarmDetail || '',
               title: `${a.maTram} · ${a.tenTram}`,
+              source: a.source === 'fms' ? 'FMS' : 'SMS',
             })
           )}">Chi tiết</button>`
         : '';
@@ -1032,9 +1078,10 @@ function renderAlerts() {
         detailBtn || dismissBtn
           ? `<div class="row-actions">${detailBtn}${dismissBtn}</div>`
           : '';
-      return `<article class="card alert-card ${warn ? 'is-warn' : ''}">
+      return `<article class="card alert-card ${warn ? 'is-warn' : ''} source-${a.source}">
         <div class="card-title-row">
           <h3>${escapeHtml(a.maTram)} · ${escapeHtml(a.tenTram)}</h3>
+          ${sourceBadge}
           ${typeBadge}
           ${warnBtn}
         </div>
@@ -1854,6 +1901,15 @@ function bindEvents() {
     state.alertTab = Number(chip.dataset.alertTab);
     renderAlerts();
   });
+  const sourceFilterEl = $('#alert-source-filters');
+  if (sourceFilterEl) {
+    sourceFilterEl.addEventListener('click', (e) => {
+      const chip = e.target.closest('[data-alert-source]');
+      if (!chip) return;
+      state.alertSourceFilter = chip.dataset.alertSource || 'all';
+      renderAlerts();
+    });
+  }
 
   $('#alerts-list').addEventListener('click', (e) => {
     const dismiss = e.target.closest('[data-dismiss]');
@@ -1866,7 +1922,8 @@ function bindEvents() {
       const info = JSON.parse(detailBtn.dataset.alarmDetail);
       const cause = (info.cause && String(info.cause).trim()) || '—';
       const detail = (info.detail && String(info.detail).trim()) || '—';
-      alert(`${info.title || 'Chi tiết cảnh báo'}\n\nNguyên nhân: ${cause}\n\nChi tiết: ${detail}`);
+      const src = info.source ? `\nNguồn: ${info.source}` : '';
+      alert(`${info.title || 'Chi tiết cảnh báo'}${src}\n\nNguyên nhân: ${cause}\n\nChi tiết: ${detail}`);
       return;
     }
     const warn = e.target.closest('[data-warn]');

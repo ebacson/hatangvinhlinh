@@ -957,6 +957,35 @@ main {
   flex-shrink: 0;
 }
 
+.badge-source {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.badge-source-fms {
+  background: #e7f6ed;
+  color: #1b7a45;
+}
+
+.badge-source-sms {
+  background: #eef0f4;
+  color: #445066;
+}
+
+.chips-source {
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+
+.chip-source {
+  font-size: 0.78rem;
+}
+
 .station-fuel {
   flex-shrink: 0;
   text-align: right;
