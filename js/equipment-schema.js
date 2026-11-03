@@ -52,7 +52,7 @@ export const EQUIPMENT_SCHEMA = {
         },
         {
           "key": "cong_suat_danh_dinh_kva",
-          "label": "Công suất danh định (kVA",
+          "label": "Công suất danh định (kVA)",
           "group": "tech"
         },
         {
@@ -274,7 +274,7 @@ export const EQUIPMENT_SCHEMA = {
         },
         {
           "key": "cong_suat_lanh_btu",
-          "label": "Công suất lạnh (BTU",
+          "label": "Công suất lạnh (BTU)",
           "group": "tech"
         },
         {
@@ -381,12 +381,12 @@ export const EQUIPMENT_SCHEMA = {
         },
         {
           "key": "dong_tai_danh_dinh_a",
-          "label": "Dòng tải danh định (A",
+          "label": "Dòng tải danh định (A)",
           "group": "tech"
         },
         {
           "key": "dong_tai_tieu_thu_hien_tai_a",
-          "label": "Dòng tải tiêu thụ hiện tại (A",
+          "label": "Dòng tải tiêu thụ hiện tại (A)",
           "group": "tech"
         },
         {
@@ -396,7 +396,7 @@ export const EQUIPMENT_SCHEMA = {
         },
         {
           "key": "so_aptomat_con_trong_a",
-          "label": "Số aptomat còn trống (A",
+          "label": "Số aptomat còn trống (A)",
           "group": "tech"
         },
         {
@@ -457,12 +457,12 @@ export const EQUIPMENT_SCHEMA = {
         },
         {
           "key": "cong_suat_ats_a",
-          "label": "Công suất ATS (A",
+          "label": "Công suất ATS (A)",
           "group": "tech"
         },
         {
           "key": "cong_suat_cau_dao_dao_chieu_a",
-          "label": "Công suất cầu dao đảo chiều (A",
+          "label": "Công suất cầu dao đảo chiều (A)",
           "group": "tech"
         },
         {
@@ -564,7 +564,7 @@ export const EQUIPMENT_SCHEMA = {
         },
         {
           "key": "cong_suat_he_thong_solar_kwp",
-          "label": "Công suất hệ thống Solar (kWp",
+          "label": "Công suất hệ thống Solar (kWp)",
           "group": "tech"
         },
         {
@@ -722,7 +722,7 @@ export const EQUIPMENT_SCHEMA = {
         },
         {
           "key": "dong_tai_a",
-          "label": "Dòng tải (A",
+          "label": "Dòng tải (A)",
           "group": "tech"
         },
         {
