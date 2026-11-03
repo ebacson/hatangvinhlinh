@@ -1,6 +1,6 @@
 /** Auto-generated from ex.xlsx — chỉ chủng loại + thông số kỹ thuật */
 export const EQUIPMENT_SCHEMA = {
-  "version": 1,
+  "version": 2,
   "types": [
     {
       "id": "may_phat_dien",
@@ -370,6 +370,11 @@ export const EQUIPMENT_SCHEMA = {
           "group": "type"
         },
         {
+          "key": "ma_thiet_bi_ip",
+          "label": "Mã thiết bị/IP",
+          "group": "tech"
+        },
+        {
           "key": "serial",
           "label": "Serial",
           "group": "tech"
@@ -392,6 +397,11 @@ export const EQUIPMENT_SCHEMA = {
         {
           "key": "cong_nghe_accu",
           "label": "Công nghệ Accu",
+          "group": "tech"
+        },
+        {
+          "key": "dung_luong_binh",
+          "label": "Dung lượng bình",
           "group": "tech"
         },
         {
@@ -428,6 +438,11 @@ export const EQUIPMENT_SCHEMA = {
         {
           "key": "so_pha",
           "label": "Số pha",
+          "group": "tech"
+        },
+        {
+          "key": "so_aptomat_con_trong_a",
+          "label": "Số aptomat còn trống (A",
           "group": "tech"
         },
         {
@@ -519,6 +534,362 @@ export const EQUIPMENT_SCHEMA = {
         {
           "key": "so_luong_khoi_dong_tu_ra_may_phat_dien",
           "label": "Số lượng khởi động từ ra máy phát điện",
+          "group": "tech"
+        }
+      ]
+    },
+    {
+      "id": "thiet_bi_cat_loc_set",
+      "title": "Thiết bị cắt lọc sét",
+      "fields": [
+        {
+          "key": "hang_san_xuat_thiet_bi",
+          "label": "Hãng sản xuất thiết bị",
+          "group": "type"
+        },
+        {
+          "key": "model",
+          "label": "Model",
+          "group": "type"
+        },
+        {
+          "key": "serial",
+          "label": "Serial",
+          "group": "tech"
+        },
+        {
+          "key": "so_pha",
+          "label": "Số pha",
+          "group": "tech"
+        },
+        {
+          "key": "nam_san_xuat",
+          "label": "Năm sản xuất",
+          "group": "tech"
+        },
+        {
+          "key": "xuat_xu",
+          "label": "Xuất xứ",
+          "group": "type"
+        },
+        {
+          "key": "loai_mov_su_dung",
+          "label": "Loại MOV sử dụng",
+          "group": "type"
+        },
+        {
+          "key": "chung_loai_thiet_bi",
+          "label": "Chủng loại thiết bị",
+          "group": "type"
+        },
+        {
+          "key": "dong_tai_dinh_muc",
+          "label": "Dòng tải định mức",
+          "group": "tech"
+        }
+      ]
+    },
+    {
+      "id": "he_thong_pin_mat_troi",
+      "title": "Hệ thống pin mặt trời",
+      "fields": [
+        {
+          "key": "ma_dan_pin_mat_troi",
+          "label": "Mã dàn pin mặt trời",
+          "group": "tech"
+        },
+        {
+          "key": "ten_dan_pin_mat_troi",
+          "label": "Tên dàn pin mặt trời",
+          "group": "tech"
+        },
+        {
+          "key": "mo_hinh_he_thong_solar",
+          "label": "Mô hình hệ thống Solar",
+          "group": "type"
+        },
+        {
+          "key": "cong_suat_he_thong_solar_kwp",
+          "label": "Công suất hệ thống Solar (kWp",
+          "group": "tech"
+        },
+        {
+          "key": "loai_inverter",
+          "label": "Loại Inverter",
+          "group": "type"
+        },
+        {
+          "key": "cong_suat_inventer",
+          "label": "Công suất Inventer",
+          "group": "tech"
+        },
+        {
+          "key": "hang_san_xuat_inventer",
+          "label": "Hãng sản xuất Inventer",
+          "group": "type"
+        },
+        {
+          "key": "so_luong_tam_pin",
+          "label": "Số Lượng tấm pin",
+          "group": "tech"
+        },
+        {
+          "key": "cong_suat_cua_mot_tam_pin",
+          "label": "Công suất của một tấm pin",
+          "group": "tech"
+        },
+        {
+          "key": "hang_san_xuat_pin",
+          "label": "Hãng sản xuất Pin",
+          "group": "type"
+        },
+        {
+          "key": "ip_thiet_bi",
+          "label": "IP thiết bị",
+          "group": "tech"
+        }
+      ]
+    },
+    {
+      "id": "binh_chua_chay",
+      "title": "Bình chữa cháy",
+      "fields": [
+        {
+          "key": "nha_san_xuat",
+          "label": "Nhà sản xuất",
+          "group": "type"
+        },
+        {
+          "key": "nam_san_xuat",
+          "label": "Năm sản xuất",
+          "group": "tech"
+        },
+        {
+          "key": "han_dung",
+          "label": "Hạn dùng",
+          "group": "tech"
+        },
+        {
+          "key": "so_kg_khi_xuat_xuong",
+          "label": "SỐ KG khi xuất xưởng",
+          "group": "tech"
+        },
+        {
+          "key": "loai_binh_chua_chay",
+          "label": "Loại bình chữa cháy",
+          "group": "type"
+        },
+        {
+          "key": "so_kg_sau_khi_can",
+          "label": "Số KG sau khi cân",
+          "group": "tech"
+        }
+      ]
+    },
+    {
+      "id": "he_thong_bao_chay",
+      "title": "Hệ thống báo cháy",
+      "fields": [
+        {
+          "key": "hang_san_xuat",
+          "label": "Hãng sản xuất",
+          "group": "type"
+        },
+        {
+          "key": "loai_thiet_bi",
+          "label": "Loại thiết bị",
+          "group": "type"
+        },
+        {
+          "key": "model",
+          "label": "Model",
+          "group": "type"
+        },
+        {
+          "key": "ma_thiet_bi_ip",
+          "label": "Mã thiết bị/IP",
+          "group": "tech"
+        },
+        {
+          "key": "serial",
+          "label": "Serial",
+          "group": "tech"
+        },
+        {
+          "key": "han_dung",
+          "label": "Hạn dùng",
+          "group": "tech"
+        },
+        {
+          "key": "nam_san_xuat",
+          "label": "Năm sản xuất",
+          "group": "tech"
+        },
+        {
+          "key": "xuat_xu",
+          "label": "Xuất xứ",
+          "group": "type"
+        },
+        {
+          "key": "so_dau_ra_canh_bao",
+          "label": "Số đầu ra cảnh báo",
+          "group": "tech"
+        },
+        {
+          "key": "so_dau_cam_bien_nhiet",
+          "label": "Số đầu cảm biến nhiệt",
+          "group": "tech"
+        },
+        {
+          "key": "so_dau_cam_bien_khoi",
+          "label": "Số đầu cảm biến khói",
+          "group": "tech"
+        },
+        {
+          "key": "tin_hieu_canh_bao_hien_tai",
+          "label": "Tín hiệu cảnh báo hiện tại",
+          "group": "tech"
+        }
+      ]
+    },
+    {
+      "id": "tu_pp_dc",
+      "title": "Tủ điện phân phối DC",
+      "fields": [
+        {
+          "key": "hang_san_xuat_thiet_bi",
+          "label": "Hãng sản xuất thiết bị",
+          "group": "type"
+        },
+        {
+          "key": "tri_so_mcb_tong",
+          "label": "Trị số MCB tổng",
+          "group": "tech"
+        },
+        {
+          "key": "dong_tai_a",
+          "label": "Dòng tải (A",
+          "group": "tech"
+        },
+        {
+          "key": "dong_tai_cua_tai_phu_1",
+          "label": "Dòng tải của Tải phụ 1",
+          "group": "tech"
+        },
+        {
+          "key": "dong_tai_cua_tai_phu_2",
+          "label": "Dòng tải của Tải phụ 2",
+          "group": "tech"
+        },
+        {
+          "key": "dong_tai_cua_tai_phu_3",
+          "label": "Dòng tải của Tải phụ 3",
+          "group": "tech"
+        },
+        {
+          "key": "dong_tai_cua_tai_phu_4",
+          "label": "Dòng tải của Tải phụ 4",
+          "group": "tech"
+        },
+        {
+          "key": "dong_tai_cua_tai_phu_5",
+          "label": "Dòng tải của Tải phụ 5",
+          "group": "tech"
+        },
+        {
+          "key": "dong_tai_cua_tai_phu_6",
+          "label": "Dòng tải của Tải phụ 6",
+          "group": "tech"
+        },
+        {
+          "key": "dong_tai_cua_tai_phu_7",
+          "label": "Dòng tải của Tải phụ 7",
+          "group": "tech"
+        },
+        {
+          "key": "dong_tai_cua_tai_phu_8",
+          "label": "Dòng tải của Tải phụ 8",
+          "group": "tech"
+        },
+        {
+          "key": "so_aptomat_con_trong",
+          "label": "Số aptomat còn trống",
+          "group": "tech"
+        }
+      ]
+    },
+    {
+      "id": "he_thong_giam_sat",
+      "title": "Hệ thống giám sát",
+      "fields": [
+        {
+          "key": "hang_san_xuat",
+          "label": "Hãng sản xuất",
+          "group": "type"
+        },
+        {
+          "key": "model",
+          "label": "Model",
+          "group": "type"
+        },
+        {
+          "key": "ma_thiet_bi_ip",
+          "label": "Mã thiết bị/IP",
+          "group": "tech"
+        },
+        {
+          "key": "serial",
+          "label": "Serial",
+          "group": "tech"
+        },
+        {
+          "key": "nam_san_xuat",
+          "label": "Năm sản xuất",
+          "group": "tech"
+        },
+        {
+          "key": "xuat_xu",
+          "label": "Xuất xứ",
+          "group": "type"
+        },
+        {
+          "key": "hang_san_xuat_thiet_bi",
+          "label": "Hãng sản xuất thiết bị",
+          "group": "type"
+        },
+        {
+          "key": "chuc_nang_giam_sat_bang_hinh_anh",
+          "label": "Chức năng giám sát bằng hình ảnh",
+          "group": "tech"
+        },
+        {
+          "key": "so_camera",
+          "label": "Số camera",
+          "group": "tech"
+        },
+        {
+          "key": "chuc_nang_giam_sat_moi_truong",
+          "label": "Chức năng giám sát môi trường",
+          "group": "tech"
+        },
+        {
+          "key": "chuc_nang_giam_sat_nhiet_do_ac_quy",
+          "label": "Chức năng giám sát nhiệt độ ắc quy",
+          "group": "tech"
+        },
+        {
+          "key": "chuc_nang_dieu_khien",
+          "label": "Chức năng điều khiển",
+          "group": "tech"
+        },
+        {
+          "key": "cam_bien_mo_cua",
+          "label": "Cảm biến mở cửa",
+          "group": "tech"
+        },
+        {
+          "key": "cam_bien_nhiet_do",
+          "label": "Cảm biến nhiệt độ",
           "group": "tech"
         }
       ]
