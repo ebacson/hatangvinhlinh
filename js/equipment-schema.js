@@ -1,4 +1,3 @@
-/** Auto-generated from ex.xlsx — chỉ chủng loại + thông số kỹ thuật */
 export const EQUIPMENT_SCHEMA = {
   "version": 2,
   "types": [
@@ -102,16 +101,6 @@ export const EQUIPMENT_SCHEMA = {
           "group": "type"
         },
         {
-          "key": "cong_suat_du_phong",
-          "label": "Công suất dự phòng",
-          "group": "tech"
-        },
-        {
-          "key": "chung_loai_thiet_bi",
-          "label": "Chủng loại thiết bị",
-          "group": "type"
-        },
-        {
           "key": "so_gio_da_chay",
           "label": "Số giờ đã chạy",
           "group": "tech"
@@ -144,16 +133,6 @@ export const EQUIPMENT_SCHEMA = {
         {
           "key": "chu_ky_thay_nho_theo_gio_chay",
           "label": "Chu kỳ thay nhớ theo giờ chạy",
-          "group": "tech"
-        },
-        {
-          "key": "ty_le_nhot_con_lai",
-          "label": "Tỷ lệ nhớt còn lại",
-          "group": "tech"
-        },
-        {
-          "key": "ty_le_nhien_lieu_con_lai",
-          "label": "Tỷ lệ nhiên liệu còn lại",
           "group": "tech"
         },
         {
@@ -394,7 +373,6 @@ export const EQUIPMENT_SCHEMA = {
           "label": "Công nghệ Accu",
           "group": "tech"
         },
-
         {
           "key": "dung_luong_binh",
           "label": "Dung lượng bình",
