@@ -591,7 +591,7 @@ export const EQUIPMENT_SCHEMA = {
     },
     {
       "id": "he_thong_pin_mat_troi",
-      "title": "Hệ thống pin mặt trời",
+      "title": "Pin mặt trời",
       "fields": [
         {
           "key": "ma_dan_pin_mat_troi",
