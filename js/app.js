@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=53';
+} from './config.js?v=54';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=53';
+} from './forecast.js?v=54';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=53';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=53';
+} from './stats.js?v=54';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=54';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -54,7 +54,7 @@ import {
   buildEquipmentFieldsHtml,
   readEquipmentFormValues,
   equipmentPayload,
-} from './equipment.js?v=53';
+} from './equipment.js?v=54';
 
 
 const app = initializeApp(firebaseConfig);
@@ -1879,7 +1879,7 @@ function equipmentDeviceCountLabel(site) {
     const n = (norm[t.id] || []).length;
     if (n) parts.push(`${t.title}: ${n}`);
   }
-  return parts.length ? parts.join(' · ') : 'Chưa có chủng loại/TSKT';
+  return parts.length ? parts.join(' · ') : 'Chưa có chủng loại/Thiết bị';
 }
 
 function filteredEquipmentSites() {
@@ -1952,7 +1952,7 @@ function renderEquipmentList() {
         <div class="station-kv">
           <div class="station-kv-row station-kv-action">
             <div class="station-kv-text">
-              <span class="station-kv-l">TSKT</span>
+              <span class="station-kv-l">Thiết bị</span>
               <strong class="station-kv-v">${escapeHtml(types)}</strong>
             </div>
             <button type="button" class="btn-outline station-action-btn" data-action="equipment" data-csht="${escapeAttr(
