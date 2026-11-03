@@ -217,21 +217,6 @@ export const EQUIPMENT_SCHEMA = {
           "group": "tech"
         },
         {
-          "key": "slot",
-          "label": "Slot",
-          "group": "tech"
-        },
-        {
-          "key": "serial_module_nan_1_2_n",
-          "label": "Serial module nắn 1,2…n",
-          "group": "tech"
-        },
-        {
-          "key": "the_tai_san_module_nan_1_2_n",
-          "label": "Thẻ tài sản module nắn 1,2…n",
-          "group": "tech"
-        },
-        {
           "key": "tong_so_module_nan_co_the_lap_toi_da",
           "label": "Tổng số module nắn có thể lắp tối đa",
           "group": "tech"
