@@ -781,6 +781,28 @@ main {
 }
 
 /* Stations */
+.equipment-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.equipment-toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 10px;
+}
+
+.equipment-filter-field {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.equipment-filter-field select {
+  width: 100%;
+}
+
 .stations-toolbar {
   margin-bottom: 14px;
 }

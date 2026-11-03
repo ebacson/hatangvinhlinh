@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=54';
+} from './config.js?v=55';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=54';
+} from './forecast.js?v=55';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=54';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=54';
+} from './stats.js?v=55';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=55';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -54,7 +54,7 @@ import {
   buildEquipmentFieldsHtml,
   readEquipmentFormValues,
   equipmentPayload,
-} from './equipment.js?v=54';
+} from './equipment.js?v=55';
 
 
 const app = initializeApp(firebaseConfig);
@@ -86,6 +86,8 @@ const state = {
   stations: [],
   query: '',
   equipmentQuery: '',
+  /** 'all' | 'vinhlinh' */
+  equipmentOrgFilter: 'vinhlinh',
   /** CSHT đang mở sheet thiết bị */
   selectedCsht: null,
   alertTab: 0,
@@ -1882,9 +1884,18 @@ function equipmentDeviceCountLabel(site) {
   return parts.length ? parts.join(' · ') : 'Chưa có chủng loại/Thiết bị';
 }
 
+function isVinhLinhStationCode(code) {
+  return /(?:^|[^A-Z])(?:GLH|VLH)/i.test(String(code || ''));
+}
+
+function siteBelongsToVinhLinh(row) {
+  const codes = [row.maTram, ...(row.maTrams || [])].filter(Boolean);
+  return codes.some(isVinhLinhStationCode);
+}
+
 function filteredEquipmentSites() {
   const q = state.equipmentQuery.trim().toLowerCase();
-  const rows = Object.entries(state.equipmentByCsht || {}).map(([maCsht, site]) => {
+  let rows = Object.entries(state.equipmentByCsht || {}).map(([maCsht, site]) => {
     const maTrams = Array.isArray(site?.maTrams)
       ? [...new Set(site.maTrams.filter(Boolean).map((x) => formatMaTram(x)).filter(Boolean))]
       : site?.maTram
@@ -1900,6 +1911,9 @@ function filteredEquipmentSites() {
       site: site || {},
     };
   });
+  if (state.equipmentOrgFilter === 'vinhlinh') {
+    rows = rows.filter(siteBelongsToVinhLinh);
+  }
   rows.sort((a, b) =>
     (a.maTram || a.maCsht).localeCompare(b.maTram || b.maCsht, 'vi')
   );
@@ -1910,6 +1924,70 @@ function filteredEquipmentSites() {
   });
 }
 
+function exportEquipmentExcel() {
+  const list = filteredEquipmentSites();
+  if (!list.length) {
+    toast('Không có CSHT nào để xuất');
+    return;
+  }
+  const orgLabel =
+    state.equipmentOrgFilter === 'vinhlinh' ? 'To-ha-tang-Vinh-Linh' : 'Tat-ca';
+  const sheets = [];
+
+  // Sheet danh sách CSHT (giống mục lục)
+  sheets.push({
+    name: 'Danh sách CSHT',
+    rows: [
+      ['STT', 'Mã CSHT', 'Mã trạm', 'Các mã trạm', 'Tên trạm', 'LAT', 'LONG'],
+      ...list.map((r, i) => [
+        i + 1,
+        r.maCsht,
+        r.maTram || '',
+        (r.maTrams || []).join(', '),
+        r.tenTram || '',
+        r.lat,
+        r.long,
+      ]),
+    ],
+  });
+
+  // Mỗi loại thiết bị = 1 sheet (định dạng gần ex.xlsx: header + dòng thiết bị)
+  for (const typeDef of equipmentTypes()) {
+    const headers = [
+      'STT',
+      'Mã CSHT(*)',
+      'Mã trạm',
+      'Tên trạm',
+      'LAT',
+      'LONG',
+      ...typeDef.fields.map((f) => f.label),
+    ];
+    const dataRows = [];
+    let stt = 0;
+    for (const r of list) {
+      const devices = equipmentDevicesByCsht(r.maCsht)[typeDef.id] || [];
+      if (!devices.length) continue;
+      for (const d of devices) {
+        stt += 1;
+        dataRows.push([
+          stt,
+          r.maCsht,
+          r.maTram || '',
+          r.tenTram || '',
+          r.lat,
+          r.long,
+          ...typeDef.fields.map((f) => (d[f.key] != null && d[f.key] !== '' ? d[f.key] : '')),
+        ]);
+      }
+    }
+    sheets.push({ name: typeDef.title, rows: [headers, ...dataRows] });
+  }
+
+  const stamp = new Date().toISOString().slice(0, 10);
+  downloadExcelWorkbook(sheets, `bao-cao-thiet-bi-${safeFilePart(orgLabel)}-${stamp}`);
+  toast(`Đã xuất ${list.length} CSHT · ${sheets.length} sheet`);
+}
+
 function renderEquipmentList() {
   const root = $('#equipment-list');
   const empty = $('#equipment-empty');
@@ -1918,14 +1996,22 @@ function renderEquipmentList() {
   const list = filteredEquipmentSites();
   if (summary) {
     summary.hidden = false;
-    summary.textContent = `${list.length} CSHT`;
+    const org =
+      state.equipmentOrgFilter === 'vinhlinh' ? ' · Tổ HT Vĩnh Linh' : '';
+    summary.textContent = `${list.length} CSHT${org}`;
+  }
+  const orgSel = $('#equipment-org-filter');
+  if (orgSel && orgSel.value !== state.equipmentOrgFilter) {
+    orgSel.value = state.equipmentOrgFilter;
   }
   if (!list.length) {
     root.innerHTML = '';
     empty.hidden = false;
     empty.innerHTML = state.equipmentQuery.trim()
       ? `<p class="empty-title">Không tìm thấy CSHT</p><p class="empty-desc">Thử mã hoặc tên khác.</p>`
-      : `<p class="empty-title">Chưa có dữ liệu thiết bị</p>`;
+      : state.equipmentOrgFilter === 'vinhlinh'
+        ? `<p class="empty-title">Không có trạm GLH/VLH</p><p class="empty-desc">Đổi bộ lọc Tổ hoặc kiểm tra mã trạm.</p>`
+        : `<p class="empty-title">Chưa có dữ liệu thiết bị</p>`;
     return;
   }
   empty.hidden = true;
@@ -2238,6 +2324,13 @@ function bindEvents() {
   $('#equipment-search')?.addEventListener('input', (e) => {
     state.equipmentQuery = e.target.value;
     renderEquipmentList();
+  });
+  $('#equipment-org-filter')?.addEventListener('change', (e) => {
+    state.equipmentOrgFilter = e.target.value === 'vinhlinh' ? 'vinhlinh' : 'all';
+    renderEquipmentList();
+  });
+  $('#equipment-export-excel')?.addEventListener('click', () => {
+    exportEquipmentExcel();
   });
   $('#equipment-list')?.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-action="equipment"][data-csht]');
