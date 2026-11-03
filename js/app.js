@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=74';
+} from './config.js?v=75';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=74';
+} from './forecast.js?v=75';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=74';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=74';
+} from './stats.js?v=75';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=75';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -59,8 +59,8 @@ import {
   mapStationMayNoToMayPhatDien,
   mergeEquipmentDeviceFillEmpty,
   countEquipmentDataFields,
-} from './equipment.js?v=74';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=74';
+} from './equipment.js?v=75';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=75';
 
 
 const app = initializeApp(firebaseConfig);
@@ -1962,7 +1962,7 @@ async function syncMayNoProfileToEquipment(csht, profile, source = 'station-mayn
 }
 
 async function syncAllMayNoStationsToEquipment() {
-  if (!state.user || !canManageStations()) return { updated: 0 };
+  if (!state.user || !isRootUser()) return { updated: 0 };
   const byCsht = new Map();
   for (const s of state.stations || []) {
     const csht = String(s.profile?.maCsht || '').trim();
@@ -2182,7 +2182,7 @@ function renderEquipmentList() {
   const summary = $('#equipment-summary');
   if (!root || !empty) return;
   const syncBtn = $('#equipment-sync-mayno');
-  if (syncBtn) syncBtn.hidden = !canManageStations();
+  if (syncBtn) syncBtn.hidden = !isRootUser();
   const list = filteredEquipmentSites();
   if (summary) {
     summary.hidden = false;
@@ -2598,8 +2598,8 @@ function bindEvents() {
     exportEquipmentExcel();
   });
   $('#equipment-sync-mayno')?.addEventListener('click', async () => {
-    if (!canManageStations()) {
-      toast('Chỉ admin hoặc root được đồng bộ');
+    if (!isRootUser()) {
+      toast('Chỉ root được đồng bộ');
       return;
     }
     const btn = $('#equipment-sync-mayno');
