@@ -487,7 +487,7 @@ export const EQUIPMENT_SCHEMA = {
         },
         {
           "key": "so_luong_khoi_dong_tu_ra_may_phat_dien",
-          "label": "Số lượng khởi động từ ra máy phát điện",
+          "label": "Dòng định mức khởi động từ (A)",
           "group": "tech"
         }
       ]
