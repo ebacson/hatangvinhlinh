@@ -108,7 +108,7 @@ export function openQrScanner() {
       settle: finish,
     };
 
-    closeBtn?.onclick = () => finish(null);
+    if (closeBtn) closeBtn.onclick = () => finish(null);
     overlay.onclick = (e) => {
       if (e.target === overlay) finish(null);
     };
