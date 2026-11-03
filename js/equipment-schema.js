@@ -308,11 +308,6 @@ export const EQUIPMENT_SCHEMA = {
           "group": "type"
         },
         {
-          "key": "cong_nghe_dieu_hoa",
-          "label": "Công nghệ điều hoà",
-          "group": "tech"
-        },
-        {
           "key": "dong_tai_hien_huu",
           "label": "Dòng tải hiện hữu",
           "group": "tech"
