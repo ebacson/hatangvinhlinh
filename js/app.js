@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=52';
+} from './config.js?v=53';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=52';
+} from './forecast.js?v=53';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=52';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=52';
+} from './stats.js?v=53';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=53';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -54,7 +54,7 @@ import {
   buildEquipmentFieldsHtml,
   readEquipmentFormValues,
   equipmentPayload,
-} from './equipment.js?v=52';
+} from './equipment.js?v=53';
 
 
 const app = initializeApp(firebaseConfig);
@@ -1491,7 +1491,7 @@ function renderDetail() {
       badge.classList.toggle('is-station', false);
     }
     const site = state.equipmentByCsht[csht] || { maCsht: csht };
-    $('#detail-title').textContent = site.maTram || csht;
+    $('#detail-title').textContent = formatMaTram(site.maTram) || csht;
     $('#detail-subtitle').textContent = [site.tenTram, csht].filter(Boolean).join(' · ') || '—';
     ensureEquipmentDraft(csht, sheet);
     renderEquipmentEditor(csht);
@@ -1852,6 +1852,16 @@ async function saveStation() {
 
 
 
+function stripStationTechPrefix(name) {
+  return String(name || '')
+    .trim()
+    .replace(/^(4G|3G|5G|UL)[-_]+/i, '');
+}
+
+function formatMaTram(name) {
+  return stripStationTechPrefix(name) || String(name || '').trim();
+}
+
 function equipmentSiteByCsht(csht) {
   const key = String(csht || '').trim();
   if (!key) return null;
@@ -1876,13 +1886,13 @@ function filteredEquipmentSites() {
   const q = state.equipmentQuery.trim().toLowerCase();
   const rows = Object.entries(state.equipmentByCsht || {}).map(([maCsht, site]) => {
     const maTrams = Array.isArray(site?.maTrams)
-      ? site.maTrams.filter(Boolean).map(String)
+      ? [...new Set(site.maTrams.filter(Boolean).map((x) => formatMaTram(x)).filter(Boolean))]
       : site?.maTram
-        ? [String(site.maTram)]
+        ? [formatMaTram(site.maTram)].filter(Boolean)
         : [];
     return {
       maCsht,
-      maTram: (site && site.maTram) || maTrams[0] || '',
+      maTram: formatMaTram((site && site.maTram) || maTrams[0] || ''),
       maTrams,
       tenTram: (site && site.tenTram) || '',
       lat: site?.lat ?? null,
@@ -2031,7 +2041,7 @@ function renderEquipmentEditor(csht, forceFields = false) {
     const geo =
       site.lat != null && site.long != null ? ` · LAT ${site.lat}, LONG ${site.long}` : '';
     const ten = site.tenTram ? ` · ${site.tenTram}` : '';
-    const ma = site.maTram ? ` · ${site.maTram}` : '';
+    const ma = site.maTram ? ` · ${formatMaTram(site.maTram)}` : '';
     hint.textContent = `CSHT: ${key}${ma}${ten}${geo}. Chỉ cập nhật chủng loại và thông số kỹ thuật.`;
   }
   if (typeSel && typeSel.dataset.filled !== '1') {
