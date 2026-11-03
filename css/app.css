@@ -1166,6 +1166,26 @@ main {
   color: #9a4d00;
 }
 
+.sheet-mode-badge.is-equipment {
+  background: #e8f7ef;
+  color: #0f6b3c;
+}
+
+.eq-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.eq-toolbar .btn-outline,
+.eq-toolbar .btn-text {
+  min-height: 36px;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
 .sheet-actions-split {
   display: flex;
   align-items: center;
