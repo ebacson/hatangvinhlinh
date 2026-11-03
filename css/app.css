@@ -901,6 +901,22 @@ main {
   color: #6d8298;
 }
 
+.eq-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.eq-detail-panel {
+  margin-top: 8px;
+}
+
+.station-kv-row.station-kv-action .eq-card-actions {
+  flex: 0 0 auto;
+}
+
+
 .stations-toolbar {
   margin-bottom: 14px;
 }

@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=59';
+} from './config.js?v=60';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=59';
+} from './forecast.js?v=60';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=59';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=59';
+} from './stats.js?v=60';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=60';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -56,7 +56,7 @@ import {
   equipmentUnitOptionLabel,
   equipmentTypeMeta,
   equipmentFilledFields,
-} from './equipment.js?v=59';
+} from './equipment.js?v=60';
 
 
 const app = initializeApp(firebaseConfig);
@@ -89,6 +89,8 @@ const state = {
   equipmentQuery: '',
   /** 'all' | 'vinhlinh' */
   equipmentOrgFilter: 'vinhlinh',
+  /** Map maCsht → true khi đang xem chi tiết */
+  equipmentExpanded: {},
   /** CSHT đang mở sheet thiết bị */
   selectedCsht: null,
   alertTab: 0,
@@ -2096,8 +2098,17 @@ function renderEquipmentList() {
         r.maTrams.length > 1
           ? ` · +${r.maTrams.length - 1} mã`
           : '';
-      const inventory = renderEquipmentInventoryHtml(r.site, r.maCsht);
-      return `<article class="station-card" data-csht="${escapeAttr(r.maCsht)}" style="--i:${index}">
+      const hasDetail = types !== 'Chưa có chủng loại/Thiết bị';
+      const expanded = !!(state.equipmentExpanded && state.equipmentExpanded[r.maCsht]);
+      const inventory = hasDetail ? renderEquipmentInventoryHtml(r.site, r.maCsht) : '';
+      const detailBtn = hasDetail
+        ? `<button type="button" class="btn-outline station-action-btn" data-action="eq-toggle" data-csht="${escapeAttr(
+            r.maCsht
+          )}">${expanded ? 'Thu gọn' : 'Chi tiết'}</button>`
+        : '';
+      return `<article class="station-card${expanded ? ' is-eq-expanded' : ''}" data-csht="${escapeAttr(
+        r.maCsht
+      )}" style="--i:${index}">
         <div class="station-accent" aria-hidden="true"></div>
         <header class="station-top">
           <div class="station-id">
@@ -2112,13 +2123,22 @@ function renderEquipmentList() {
               <span class="station-kv-l">Thiết bị</span>
               <strong class="station-kv-v">${escapeHtml(types)}</strong>
             </div>
-            <button type="button" class="btn-outline station-action-btn" data-action="equipment" data-csht="${escapeAttr(
-              r.maCsht
-            )}">Thêm / sửa</button>
+            <div class="eq-card-actions">
+              ${detailBtn}
+              <button type="button" class="btn-outline station-action-btn" data-action="equipment" data-csht="${escapeAttr(
+                r.maCsht
+              )}">Thêm / sửa</button>
+            </div>
           </div>
         </div>
-        ${inventory}
-        ${editor ? `<p class="eq-card-footer">${escapeHtml(editor)}</p>` : ''}
+        ${
+          hasDetail
+            ? `<div class="eq-detail-panel" ${expanded ? '' : 'hidden'}>
+          ${inventory}
+          ${editor ? `<p class="eq-card-footer">${escapeHtml(editor)}</p>` : ''}
+        </div>`
+            : ''
+        }
       </article>`;
     })
     .join('');
@@ -2491,6 +2511,15 @@ function bindEvents() {
     exportEquipmentExcel();
   });
   $('#equipment-list')?.addEventListener('click', (e) => {
+    const toggleBtn = e.target.closest('[data-action="eq-toggle"][data-csht]');
+    if (toggleBtn) {
+      e.preventDefault();
+      const csht = toggleBtn.dataset.csht;
+      if (!state.equipmentExpanded) state.equipmentExpanded = {};
+      state.equipmentExpanded[csht] = !state.equipmentExpanded[csht];
+      renderEquipmentList();
+      return;
+    }
     const editBtn = e.target.closest('[data-action="eq-edit"][data-csht]');
     if (editBtn) {
       e.preventDefault();
