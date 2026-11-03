@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=49';
+} from './config.js?v=50';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,26 +36,25 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=49';
+} from './forecast.js?v=50';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=49';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=49';
+} from './stats.js?v=50';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=50';
 import {
   equipmentTypes,
   equipmentTypeById,
   loadEquipmentCatalog,
   catalogDevicesForCsht,
   normalizeEquipment,
-  equipmentSummary,
   buildEquipmentFieldsHtml,
   readEquipmentFormValues,
   equipmentPayload,
-} from './equipment.js?v=49';
+} from './equipment.js?v=50';
 
 
 const app = initializeApp(firebaseConfig);
@@ -86,6 +85,9 @@ const state = {
   tab: 'stations',
   stations: [],
   query: '',
+  equipmentQuery: '',
+  /** CSHT đang mở sheet thiết bị */
+  selectedCsht: null,
   alertTab: 0,
   selectedKey: null,
   /** null | 'edit' | 'lock' | 'station' | 'history' */
@@ -549,6 +551,7 @@ function render() {
 
   if (state.tab === 'stations') renderStations();
   if (state.tab === 'alerts') renderAlerts();
+  if (state.tab === 'equipment') renderEquipmentList();
   if (state.tab === 'stats' && canViewStats()) renderStats();
   if (state.tab === 'settings') renderSettings();
   renderDetail();
@@ -972,15 +975,6 @@ function renderStations() {
               s.stationKey
             )}">Cập nhật MN</button>
           </div>
-          <div class="station-kv-row station-kv-action">
-            <div class="station-kv-text">
-              <span class="station-kv-l">Thiết bị</span>
-              <strong class="station-kv-v">${escapeHtml(equipmentSummary(stationEquipmentSite(s)))}</strong>
-            </div>
-            <button type="button" class="btn-outline station-action-btn" data-action="equipment" data-key="${escapeAttr(
-              s.stationKey
-            )}">Cập nhật TB</button>
-          </div>
         </div>
 
         <div class="station-metrics">
@@ -1400,13 +1394,6 @@ function openStationSheet(stationKey, mode) {
     toast('Chỉ admin hoặc root được sửa/xóa trạm');
     return;
   }
-  if (mode === 'equipment') {
-    const st = state.stations.find((x) => x.stationKey === stationKey);
-    if (!(st?.profile?.maCsht || '').trim()) {
-      toast('Trạm chưa có mã CSHT — gán CSHT trước khi cập nhật thiết bị');
-      return;
-    }
-  }
   if (mode === 'delete') {
     deleteStation(stationKey);
     return;
@@ -1472,10 +1459,52 @@ function renderDetail() {
   const equipmentPanel = $('#detail-equipment-panel');
   const stationPanel = $('#detail-station-panel');
   const historyPanel = $('#detail-history-panel');
-  if (!state.selectedKey || !state.sheetMode) {
+  const isEquipment = state.sheetMode === 'equipment';
+  if ((!state.selectedKey && !isEquipment) || !state.sheetMode) {
     sheet.hidden = true;
     backdrop.hidden = true;
     stopRunHistoryListener();
+    return;
+  }
+  if (isEquipment) {
+    const csht = (state.selectedCsht || '').trim();
+    if (!csht) {
+      state.sheetMode = null;
+      sheet.hidden = true;
+      backdrop.hidden = true;
+      return;
+    }
+    sheet.hidden = false;
+    backdrop.hidden = false;
+    editPanel.hidden = true;
+    if (lockPanel) lockPanel.hidden = true;
+    if (equipmentPanel) equipmentPanel.hidden = false;
+    if (stationPanel) stationPanel.hidden = true;
+    historyPanel.hidden = true;
+    sheet.setAttribute('aria-label', 'Cập nhật thiết bị');
+    const badge = $('#detail-mode-badge');
+    if (badge) {
+      badge.textContent = 'Thiết bị';
+      badge.classList.toggle('is-history', false);
+      badge.classList.toggle('is-lock', false);
+      badge.classList.toggle('is-equipment', true);
+      badge.classList.toggle('is-station', false);
+    }
+    const site = state.equipmentByCsht[csht] || { maCsht: csht };
+    $('#detail-title').textContent = csht;
+    $('#detail-subtitle').textContent = site.tenTram || '—';
+    ensureEquipmentDraft(csht, sheet);
+    renderEquipmentEditor(csht);
+    if (!equipmentCatalog) {
+      loadEquipmentCatalog()
+        .then((data) => {
+          equipmentCatalog = data;
+          if (state.sheetMode === 'equipment' && state.selectedCsht === csht) {
+            renderEquipmentEditor(csht);
+          }
+        })
+        .catch(() => {});
+    }
     return;
   }
   const s = state.stations.find((x) => x.stationKey === state.selectedKey);
@@ -1489,14 +1518,13 @@ function renderDetail() {
   }
   const isEdit = state.sheetMode === 'edit';
   const isLock = state.sheetMode === 'lock';
-  const isEquipment = state.sheetMode === 'equipment';
   const isStation = state.sheetMode === 'station';
   const isHistory = state.sheetMode === 'history';
   sheet.hidden = false;
   backdrop.hidden = false;
   editPanel.hidden = !isEdit;
   if (lockPanel) lockPanel.hidden = !isLock;
-  if (equipmentPanel) equipmentPanel.hidden = !isEquipment;
+  if (equipmentPanel) equipmentPanel.hidden = true;
   if (stationPanel) stationPanel.hidden = !isStation;
   historyPanel.hidden = !isHistory;
   sheet.setAttribute(
@@ -1505,11 +1533,9 @@ function renderDetail() {
       ? 'Cập nhật MN'
       : isLock
         ? 'Cập nhật mã khóa'
-        : isEquipment
-          ? 'Cập nhật thiết bị'
-          : isStation
-            ? 'Sửa thông tin trạm'
-            : 'Chi tiết trạm'
+        : isStation
+          ? 'Sửa thông tin trạm'
+          : 'Chi tiết trạm'
   );
   const badge = $('#detail-mode-badge');
   if (badge) {
@@ -1517,14 +1543,12 @@ function renderDetail() {
       ? 'Cập nhật MN'
       : isLock
         ? 'Mã khóa'
-        : isEquipment
-          ? 'Thiết bị'
-          : isStation
-            ? 'Sửa trạm'
-            : 'Chi tiết';
+        : isStation
+          ? 'Sửa trạm'
+          : 'Chi tiết';
     badge.classList.toggle('is-history', isHistory);
     badge.classList.toggle('is-lock', isLock);
-    badge.classList.toggle('is-equipment', isEquipment);
+    badge.classList.toggle('is-equipment', false);
     badge.classList.toggle('is-station', isStation);
   }
   $('#detail-title').textContent = s.profile.maTram || s.stationKey;
@@ -1568,21 +1592,6 @@ function renderDetail() {
     }
     const cshtEl = $('#detail-lock-csht');
     if (cshtEl) cshtEl.textContent = s.profile.maCsht || '—';
-  }
-
-  if (isEquipment) {
-    ensureEquipmentDraft(s, sheet);
-    renderEquipmentEditor(s);
-    if (!equipmentCatalog) {
-      loadEquipmentCatalog()
-        .then((data) => {
-          equipmentCatalog = data;
-          if (state.sheetMode === 'equipment' && state.selectedKey === s.stationKey) {
-            renderEquipmentEditor(s);
-          }
-        })
-        .catch(() => {});
-    }
   }
 
   if (isStation) {
@@ -1842,27 +1851,126 @@ async function saveStation() {
 
 
 
-function stationEquipmentSite(station) {
-  const csht = (station?.profile?.maCsht || '').trim();
-  if (!csht) return null;
-  return state.equipmentByCsht[csht] || null;
+
+function equipmentSiteByCsht(csht) {
+  const key = String(csht || '').trim();
+  if (!key) return null;
+  return state.equipmentByCsht[key] || null;
 }
 
-function stationEquipment(station) {
-  return normalizeEquipment(stationEquipmentSite(station));
+function equipmentDevicesByCsht(csht) {
+  return normalizeEquipment(equipmentSiteByCsht(csht));
 }
 
-function ensureEquipmentDraft(station, sheet) {
+function equipmentDeviceCountLabel(site) {
+  const norm = normalizeEquipment(site);
+  const parts = [];
+  for (const t of equipmentTypes()) {
+    const n = (norm[t.id] || []).length;
+    if (n) parts.push(`${t.title}: ${n}`);
+  }
+  return parts.length ? parts.join(' · ') : 'Chưa có chủng loại/TSKT';
+}
+
+function filteredEquipmentSites() {
+  const q = state.equipmentQuery.trim().toLowerCase();
+  const rows = Object.entries(state.equipmentByCsht || {}).map(([maCsht, site]) => ({
+    maCsht,
+    tenTram: (site && site.tenTram) || '',
+    lat: site?.lat ?? null,
+    long: site?.long ?? null,
+    site: site || {},
+  }));
+  rows.sort((a, b) => a.maCsht.localeCompare(b.maCsht, 'vi'));
+  if (!q) return rows;
+  return rows.filter((r) => {
+    const hay = `${r.maCsht} ${r.tenTram}`.toLowerCase();
+    return hay.includes(q);
+  });
+}
+
+function renderEquipmentList() {
+  const root = $('#equipment-list');
+  const empty = $('#equipment-empty');
+  const summary = $('#equipment-summary');
+  if (!root || !empty) return;
+  const list = filteredEquipmentSites();
+  if (summary) {
+    summary.hidden = false;
+    summary.textContent = `${list.length} CSHT`;
+  }
+  if (!list.length) {
+    root.innerHTML = '';
+    empty.hidden = false;
+    empty.innerHTML = state.equipmentQuery.trim()
+      ? `<p class="empty-title">Không tìm thấy CSHT</p><p class="empty-desc">Thử mã hoặc tên khác.</p>`
+      : `<p class="empty-title">Chưa có dữ liệu thiết bị</p>`;
+    return;
+  }
+  empty.hidden = true;
+  root.innerHTML = list
+    .map((r, index) => {
+      const geo =
+        r.lat != null && r.long != null
+          ? `${escapeHtml(String(r.lat))}, ${escapeHtml(String(r.long))}`
+          : '—';
+      const types = equipmentDeviceCountLabel(r.site);
+      return `<article class="station-card" data-csht="${escapeAttr(r.maCsht)}" style="--i:${index}">
+        <div class="station-accent" aria-hidden="true"></div>
+        <header class="station-top">
+          <div class="station-id">
+            <span class="station-code">${escapeHtml(r.maCsht)}</span>
+          </div>
+        </header>
+        <p class="station-name">${escapeHtml(r.tenTram || 'Chưa có tên')}</p>
+        <p class="station-addr">LAT/LONG: ${geo}</p>
+        <div class="station-kv">
+          <div class="station-kv-row station-kv-action">
+            <div class="station-kv-text">
+              <span class="station-kv-l">TSKT</span>
+              <strong class="station-kv-v">${escapeHtml(types)}</strong>
+            </div>
+            <button type="button" class="btn-outline station-action-btn" data-action="equipment" data-csht="${escapeAttr(
+              r.maCsht
+            )}">Cập nhật TB</button>
+          </div>
+        </div>
+      </article>`;
+    })
+    .join('');
+}
+
+function openEquipmentSheet(maCsht) {
+  const csht = String(maCsht || '').trim();
+  if (!csht) {
+    toast('Thiếu mã CSHT');
+    return;
+  }
+  state.selectedCsht = csht;
+  state.selectedKey = null;
+  state.sheetMode = 'equipment';
+  const sheet = $('#detail-sheet');
+  if (sheet) {
+    sheet.dataset.bound = '';
+    sheet.dataset.mode = 'equipment';
+  }
+  stopRunHistoryListener();
+  render();
+}
+
+function ensureEquipmentDraft(csht, sheet) {
+  const key = String(csht || '').trim();
   const needsInit =
     !equipmentDraft ||
-    equipmentDraft.stationKey !== station.stationKey ||
+    equipmentDraft.maCsht !== key ||
     !sheet.dataset.bound ||
-    sheet.dataset.key !== station.stationKey ||
+    sheet.dataset.key !== key ||
     sheet.dataset.mode !== 'equipment';
   if (!needsInit) return;
   const byType = {};
+  const existingMap = equipmentDevicesByCsht(key);
   for (const t of equipmentTypes()) {
-    const existing = (stationEquipment(station)[t.id]) || [];
+    const existing = existingMap[t.id] || [];
     byType[t.id] = existing.map((d) => ({ ...d }));
   }
   const prefer =
@@ -1870,14 +1978,13 @@ function ensureEquipmentDraft(station, sheet) {
     equipmentTypes()[0]?.id ||
     'may_phat_dien';
   equipmentDraft = {
-    stationKey: station.stationKey,
-    maCsht: station.profile.maCsht || '',
+    maCsht: key,
     typeId: prefer,
     index: 0,
     byType,
     dirty: false,
   };
-  sheet.dataset.key = station.stationKey;
+  sheet.dataset.key = key;
   sheet.dataset.mode = 'equipment';
   sheet.dataset.bound = '1';
   const fields = $('#eq-fields');
@@ -1897,21 +2004,19 @@ function captureEquipmentFormIntoDraft() {
   equipmentDraft.byType[equipmentDraft.typeId] = list;
 }
 
-function renderEquipmentEditor(station, forceFields = false) {
+function renderEquipmentEditor(csht, forceFields = false) {
   if (!equipmentDraft) return;
+  const key = String(csht || equipmentDraft.maCsht || '').trim();
   const typeSel = $('#eq-type');
   const idxSel = $('#eq-device-index');
   const hint = $('#eq-csht-hint');
   const status = $('#eq-file-status');
+  const site = equipmentSiteByCsht(key) || {};
   if (hint) {
-    const csht = station.profile.maCsht || '—';
-    const site = stationEquipmentSite(station);
     const geo =
-      site && site.lat != null && site.long != null
-        ? ` · LAT ${site.lat}, LONG ${site.long}`
-        : '';
-    const ten = site?.tenTram ? ` · ${site.tenTram}` : '';
-    hint.textContent = `CSHT: ${csht}${ten}${geo}. Chỉ cập nhật chủng loại và thông số kỹ thuật.`;
+      site.lat != null && site.long != null ? ` · LAT ${site.lat}, LONG ${site.long}` : '';
+    const ten = site.tenTram ? ` · ${site.tenTram}` : '';
+    hint.textContent = `CSHT: ${key}${ten}${geo}. Chỉ cập nhật chủng loại và thông số kỹ thuật.`;
   }
   if (typeSel && typeSel.dataset.filled !== '1') {
     typeSel.innerHTML = equipmentTypes()
@@ -1934,14 +2039,14 @@ function renderEquipmentEditor(station, forceFields = false) {
   }
   const typeDef = equipmentTypeById(equipmentDraft.typeId);
   const fields = $('#eq-fields');
-  const stamp = `${equipmentDraft.stationKey}|${equipmentDraft.typeId}|${equipmentDraft.index}`;
+  const stamp = `${equipmentDraft.maCsht}|${equipmentDraft.typeId}|${equipmentDraft.index}`;
   if (fields && typeDef && (forceFields || fields.dataset.stamp !== stamp)) {
     fields.innerHTML = buildEquipmentFieldsHtml(typeDef, list[equipmentDraft.index] || {});
     fields.dataset.stamp = stamp;
   }
   if (status) {
     const nFile = equipmentCatalog
-      ? catalogDevicesForCsht(equipmentCatalog, station.profile.maCsht, equipmentDraft.typeId).length
+      ? catalogDevicesForCsht(equipmentCatalog, key, equipmentDraft.typeId).length
       : null;
     if (nFile == null) {
       status.hidden = true;
@@ -1960,16 +2065,14 @@ function onEquipmentTypeChange() {
   if (!equipmentDraft) return;
   equipmentDraft.typeId = $('#eq-type')?.value || equipmentDraft.typeId;
   equipmentDraft.index = 0;
-  const s = state.stations.find((x) => x.stationKey === state.selectedKey);
-  if (s) renderEquipmentEditor(s, true);
+  renderEquipmentEditor(equipmentDraft.maCsht, true);
 }
 
 function onEquipmentIndexChange() {
   captureEquipmentFormIntoDraft();
   if (!equipmentDraft) return;
   equipmentDraft.index = Number($('#eq-device-index')?.value || 0) || 0;
-  const s = state.stations.find((x) => x.stationKey === state.selectedKey);
-  if (s) renderEquipmentEditor(s, true);
+  renderEquipmentEditor(equipmentDraft.maCsht, true);
 }
 
 function addEquipmentDevice() {
@@ -1979,16 +2082,14 @@ function addEquipmentDevice() {
   list.push({});
   equipmentDraft.byType[equipmentDraft.typeId] = list;
   equipmentDraft.index = list.length - 1;
-  const s = state.stations.find((x) => x.stationKey === state.selectedKey);
-  if (s) renderEquipmentEditor(s, true);
+  renderEquipmentEditor(equipmentDraft.maCsht, true);
 }
 
 async function applyEquipmentFromFile() {
-  const s = state.stations.find((x) => x.stationKey === state.selectedKey);
-  if (!s || !equipmentDraft) return;
-  const csht = (s.profile.maCsht || '').trim();
+  if (!equipmentDraft) return;
+  const csht = (equipmentDraft.maCsht || '').trim();
   if (!csht) {
-    toast('Trạm chưa có mã CSHT — không khớp file');
+    toast('Thiếu mã CSHT — không khớp file');
     return;
   }
   try {
@@ -2000,7 +2101,7 @@ async function applyEquipmentFromFile() {
   const fromFile = catalogDevicesForCsht(equipmentCatalog, csht, equipmentDraft.typeId);
   if (!fromFile.length) {
     toast('File không có thiết bị loại này cho CSHT này');
-    renderEquipmentEditor(s, true);
+    renderEquipmentEditor(csht, true);
     return;
   }
   captureEquipmentFormIntoDraft();
@@ -2008,12 +2109,11 @@ async function applyEquipmentFromFile() {
   equipmentDraft.index = 0;
   equipmentDraft.dirty = true;
   toast(`Đã nạp ${fromFile.length} thiết bị từ file (chưa lưu)`);
-  renderEquipmentEditor(s, true);
+  renderEquipmentEditor(csht, true);
 }
 
 async function saveEquipment() {
-  const key = state.selectedKey;
-  if (!key || !state.user || !equipmentDraft) return;
+  if (!state.user || !equipmentDraft) return;
   captureEquipmentFormIntoDraft();
   const typeId = equipmentDraft.typeId;
   const typeDef = equipmentTypeById(typeId);
@@ -2032,15 +2132,18 @@ async function saveEquipment() {
     .filter((d) => Object.keys(d).length > 0);
   const who = currentUserLabel();
   const payload = equipmentPayload(devices, who, state.user.uid, equipmentDraft.dirty ? 'file+manual' : 'manual');
-  // Firebase: replace node for this type only
+  const csht = (equipmentDraft.maCsht || '').trim();
+  if (!csht) {
+    toast('Thiếu mã CSHT — không lưu được thiết bị');
+    return;
+  }
   try {
-    const csht = (equipmentDraft.maCsht || '').trim();
-    if (!csht) {
-      toast('Trạm chưa có mã CSHT — không lưu được thiết bị');
-      return;
-    }
+    const site = equipmentSiteByCsht(csht) || {};
     await update(ref(db, `equipment/${csht}`), {
       maCsht: csht,
+      tenTram: site.tenTram || null,
+      lat: site.lat ?? null,
+      long: site.long ?? null,
       [typeId]: {
         devices: payload.devices,
         lastEditedBy: who,
@@ -2049,17 +2152,11 @@ async function saveEquipment() {
         source: payload.source,
       },
     });
-    await update(ref(db, `stations/${key}/profile`), {
-      lastEditedBy: who,
-      lastEditedByUid: state.user.uid,
-      lastEditedAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
     const sheet = $('#detail-sheet');
     if (sheet) sheet.dataset.bound = '';
     equipmentDraft = null;
     toast(devices.length ? `Đã lưu ${devices.length} ${typeDef.title}` : `Đã xóa dữ liệu ${typeDef.title}`);
-    state.selectedKey = null;
+    state.selectedCsht = null;
     state.sheetMode = null;
     render();
   } catch (e) {
@@ -2110,6 +2207,16 @@ function bindEvents() {
     state.query = e.target.value;
     renderStations();
   });
+  $('#equipment-search')?.addEventListener('input', (e) => {
+    state.equipmentQuery = e.target.value;
+    renderEquipmentList();
+  });
+  $('#equipment-list')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action="equipment"][data-csht]');
+    if (!btn) return;
+    e.preventDefault();
+    openEquipmentSheet(btn.dataset.csht);
+  });
 
   $('#stats-period-type')?.addEventListener('change', (e) => {
     state.statsPeriodType = e.target.value;
@@ -2136,7 +2243,6 @@ function bindEvents() {
     const action = btn.dataset.action;
     if (action === 'edit') openStationSheet(key, 'edit');
     else if (action === 'lock') openStationSheet(key, 'lock');
-    else if (action === 'equipment') openStationSheet(key, 'equipment');
     else if (action === 'station') openStationSheet(key, 'station');
     else if (action === 'delete') openStationSheet(key, 'delete');
     else if (action === 'history') openStationSheet(key, 'history');
@@ -2232,6 +2338,7 @@ function bindEvents() {
 
 function closeDetail() {
   state.selectedKey = null;
+  state.selectedCsht = null;
   state.sheetMode = null;
   stopRunHistoryListener();
   render();

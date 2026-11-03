@@ -1325,7 +1325,7 @@ main {
   border: 0;
   background: transparent;
   font: inherit;
-  font-size: 0.78rem;
+  font-size: 0.7rem;
   color: var(--muted);
   display: flex;
   flex-direction: column;
@@ -1350,10 +1350,14 @@ main {
 }
 
 .chips {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 12px;
+}
+.chips .chip {
+  flex: 1 1 auto;
+  min-width: 5.5rem;
 }
 
 .chip {
