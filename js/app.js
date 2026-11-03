@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=47';
+} from './config.js?v=48';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=47';
+} from './forecast.js?v=48';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=47';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=47';
+} from './stats.js?v=48';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=48';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -55,7 +55,7 @@ import {
   buildEquipmentFieldsHtml,
   readEquipmentFormValues,
   equipmentPayload,
-} from './equipment.js?v=47';
+} from './equipment.js?v=48';
 
 
 const app = initializeApp(firebaseConfig);
@@ -1950,12 +1950,6 @@ function renderEquipmentEditor(station, forceFields = false) {
       status.textContent = `File có ${nFile} thiết bị loại này cho CSHT này.`;
     } else {
       status.hidden = false;
-      status.textContent = 'File chưa có dữ liệu loại này cho CSHT này — nhập tay.';
-    }
-  }
-}
-
-false;
       status.textContent = 'File chưa có dữ liệu loại này cho CSHT này — nhập tay.';
     }
   }
