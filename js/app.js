@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=72';
+} from './config.js?v=73';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=72';
+} from './forecast.js?v=73';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=72';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=72';
+} from './stats.js?v=73';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=73';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -56,8 +56,11 @@ import {
   equipmentUnitOptionLabel,
   equipmentTypeMeta,
   equipmentFilledFields,
-} from './equipment.js?v=72';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=72';
+  mapStationMayNoToMayPhatDien,
+  mergeEquipmentDeviceFillEmpty,
+  countEquipmentDataFields,
+} from './equipment.js?v=73';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=73';
 
 
 const app = initializeApp(firebaseConfig);
@@ -1702,6 +1705,15 @@ async function saveStationInfo() {
   };
   try {
     await update(ref(db, `stations/${key}/profile`), updates);
+    const csht = String(updates.maCsht || '').trim();
+    if (csht && updates.generatorName) {
+      const station = state.stations.find((s) => s.stationKey === key);
+      syncMayNoProfileToEquipment(
+        csht,
+        { ...(station?.profile || {}), ...updates },
+        'station-mayno'
+      ).catch(() => {});
+    }
     const sheet = $('#detail-sheet');
     if (sheet) sheet.dataset.bound = '';
     toast('Đã lưu thông tin trạm');
@@ -1835,6 +1847,14 @@ async function saveStation() {
     if (levelChanged && levelText !== '') {
       await set(ref(db, `stations/${key}/stats/runMinutesSinceRefuel`), 0);
     }
+    const station = state.stations.find((s) => s.stationKey === key);
+    const csht = String(
+      updates.maCsht || station?.profile?.maCsht || ''
+    ).trim();
+    if (csht) {
+      const mergedProfile = { ...(station?.profile || {}), ...updates };
+      syncMayNoProfileToEquipment(csht, mergedProfile, 'station-mayno').catch(() => {});
+    }
     sheet.dataset.bound = '';
     toast('Đã lưu');
     state.selectedKey = null;
@@ -1866,6 +1886,92 @@ function equipmentSiteByCsht(csht) {
 
 function equipmentDevicesByCsht(csht) {
   return normalizeEquipment(equipmentSiteByCsht(csht));
+}
+
+/** Profile Máy nổ tốt nhất theo mã CSHT (nhiều field nhất). */
+function bestStationProfileForCsht(csht) {
+  const key = String(csht || '').trim();
+  if (!key) return null;
+  let best = null;
+  let bestScore = -1;
+  for (const s of state.stations || []) {
+    if (String(s.profile?.maCsht || '').trim() !== key) continue;
+    const mapped = mapStationMayNoToMayPhatDien(s.profile);
+    const score = countEquipmentDataFields(mapped);
+    if (score > bestScore) {
+      bestScore = score;
+      best = s.profile;
+    }
+  }
+  return bestScore > 0 ? best : null;
+}
+
+function applyMayNoMapToMayPhatList(list, profile) {
+  const mapped = mapStationMayNoToMayPhatDien(profile);
+  if (!countEquipmentDataFields(mapped)) return { list, changed: false };
+  const next = Array.isArray(list) ? list.map((d) => ({ ...d })) : [];
+  if (!next.length) next.push({});
+  const { device, changed } = mergeEquipmentDeviceFillEmpty(next[0], mapped);
+  if (!changed) return { list: next, changed: false };
+  next[0] = device;
+  return { list: next, changed: true };
+}
+
+/** Ghi máy phát điện từ profile Máy nổ (chỉ điền ô trống). */
+async function syncMayNoProfileToEquipment(csht, profile, source = 'station-mayno') {
+  const key = String(csht || '').trim();
+  const mapped = mapStationMayNoToMayPhatDien(profile);
+  if (!key || !countEquipmentDataFields(mapped) || !state.user) return false;
+  const site = equipmentSiteByCsht(key) || {};
+  const existing = [...(equipmentDevicesByCsht(key).may_phat_dien || [])];
+  const { list, changed } = applyMayNoMapToMayPhatList(existing, profile);
+  if (!changed) return false;
+  const who = currentUserLabel();
+  const devices = list.filter((d) => countEquipmentDataFields(d) > 0);
+  if (!devices.length) return false;
+  const payload = equipmentPayload(devices, who, state.user.uid, source);
+  await update(ref(db, `equipment/${key}`), {
+    maCsht: key,
+    maTram: site.maTram || null,
+    maTrams: site.maTrams || null,
+    tenTram: site.tenTram || null,
+    lat: site.lat ?? null,
+    long: site.long ?? null,
+    lastEditedBy: who,
+    lastEditedByUid: state.user.uid,
+    lastEditedAt: serverTimestamp(),
+    may_phat_dien: {
+      devices: payload.devices,
+      lastEditedBy: who,
+      lastEditedByUid: state.user.uid,
+      lastEditedAt: serverTimestamp(),
+      source,
+    },
+  });
+  return true;
+}
+
+async function syncAllMayNoStationsToEquipment() {
+  if (!state.user || !canManageStations()) return { updated: 0 };
+  const byCsht = new Map();
+  for (const s of state.stations || []) {
+    const csht = String(s.profile?.maCsht || '').trim();
+    if (!csht) continue;
+    const mapped = mapStationMayNoToMayPhatDien(s.profile);
+    const score = countEquipmentDataFields(mapped);
+    if (!score) continue;
+    const prev = byCsht.get(csht);
+    if (!prev || score > prev.score) byCsht.set(csht, { profile: s.profile, score });
+  }
+  let updated = 0;
+  for (const [csht, { profile }] of byCsht) {
+    try {
+      if (await syncMayNoProfileToEquipment(csht, profile, 'station-mayno')) updated += 1;
+    } catch {
+      /* continue */
+    }
+  }
+  return { updated, total: byCsht.size };
 }
 
 function equipmentDeviceCountLabel(site) {
@@ -2065,6 +2171,8 @@ function renderEquipmentList() {
   const empty = $('#equipment-empty');
   const summary = $('#equipment-summary');
   if (!root || !empty) return;
+  const syncBtn = $('#equipment-sync-mayno');
+  if (syncBtn) syncBtn.hidden = !canManageStations();
   const list = filteredEquipmentSites();
   if (summary) {
     summary.hidden = false;
@@ -2181,6 +2289,11 @@ function ensureEquipmentDraft(csht, sheet) {
   for (const t of equipmentTypes()) {
     const existing = existingMap[t.id] || [];
     byType[t.id] = existing.map((d) => ({ ...d }));
+  }
+  const mayNoProfile = bestStationProfileForCsht(key);
+  if (mayNoProfile) {
+    const applied = applyMayNoMapToMayPhatList(byType.may_phat_dien || [], mayNoProfile);
+    byType.may_phat_dien = applied.list;
   }
   const focus = state.equipmentFocus || {};
   const prefer =
@@ -2489,6 +2602,24 @@ function bindEvents() {
   });
   $('#equipment-export-excel')?.addEventListener('click', () => {
     exportEquipmentExcel();
+  });
+  $('#equipment-sync-mayno')?.addEventListener('click', async () => {
+    if (!canManageStations()) {
+      toast('Chỉ admin hoặc root được đồng bộ');
+      return;
+    }
+    const btn = $('#equipment-sync-mayno');
+    if (btn) btn.disabled = true;
+    try {
+      toast('Đang đồng bộ Máy nổ → Máy phát điện…');
+      const { updated, total } = await syncAllMayNoStationsToEquipment();
+      toast(`Đã đồng bộ ${updated}/${total || 0} CSHT từ Máy nổ`);
+      renderEquipmentList();
+    } catch (e) {
+      toast('Đồng bộ thất bại: ' + (e.message || e));
+    } finally {
+      if (btn) btn.disabled = false;
+    }
   });
   $('#equipment-list')?.addEventListener('click', (e) => {
     const toggleBtn = e.target.closest('[data-action="eq-toggle"][data-csht]');

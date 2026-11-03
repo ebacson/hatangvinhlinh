@@ -1,5 +1,5 @@
 /** Quản lý thiết bị trạm — root RTDB `equipment/{CSHT_…}` (chủng loại + thông số KT). */
-import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=72';
+import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=73';
 
 const BASE = '/hatangvinhlinh';
 
@@ -69,7 +69,7 @@ const TYPE_IDS = new Set(equipmentTypes().map((t) => t.id));
 export async function loadEquipmentCatalog() {
   if (catalogCache) return catalogCache;
   if (!catalogPromise) {
-    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=72`)
+    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=73`)
       .then((r) => {
         if (!r.ok) throw new Error('Không tải được file thiết bị');
         return r.json();
@@ -203,6 +203,72 @@ export function equipmentPayload(devices, who, uid, source) {
     lastEditedAt: Date.now(),
     source: source || 'manual',
   };
+}
+
+/** Nhãn loại NL station → text hiển thị trên thiết bị. */
+export function stationFuelTypeToLabel(type) {
+  if (type === 'gasoline') return 'Xăng';
+  if (type === 'diesel') return 'Dầu';
+  return type ? String(type) : '';
+}
+
+/**
+ * Map thông số Máy nổ (station.profile) → máy phát điện.
+ * Tên máy nổ → Hãng sản xuất; các thông số cùng nghĩa map theo.
+ */
+export function mapStationMayNoToMayPhatDien(profile) {
+  const p = profile && typeof profile === 'object' ? profile : {};
+  const out = {};
+  const name = String(p.generatorName || '').trim();
+  if (name) out.hang_san_xuat = name;
+
+  const fuel = stationFuelTypeToLabel(p.fuelType);
+  if (fuel) out.loai_nhien_lieu = fuel;
+
+  if (p.fuelRateLitersPerHour != null && p.fuelRateLitersPerHour !== '') {
+    const n = Number(p.fuelRateLitersPerHour);
+    if (Number.isFinite(n)) out.dinh_muc_nhien_lieu = String(n);
+  }
+
+  if (p.tankCapacityLiters != null && p.tankCapacityLiters !== '') {
+    const n = Number(p.tankCapacityLiters);
+    if (Number.isFinite(n)) out.dung_tich_binh_nhien_lieu = String(n);
+  }
+
+  if (p.lastFuelTotalRunMinutes != null && p.lastFuelTotalRunMinutes !== '') {
+    const mins = Number(p.lastFuelTotalRunMinutes);
+    if (Number.isFinite(mins) && mins >= 0) {
+      const hours = Math.round((mins / 60) * 10) / 10;
+      out.so_gio_da_chay = String(hours);
+    }
+  }
+
+  return out;
+}
+
+/** Gộp mapped vào device hiện có — chỉ điền ô trống (không ghi đè). */
+export function mergeEquipmentDeviceFillEmpty(existing, mapped) {
+  const base = existing && typeof existing === 'object' ? { ...existing } : {};
+  const src = mapped && typeof mapped === 'object' ? mapped : {};
+  let changed = false;
+  for (const [k, v] of Object.entries(src)) {
+    if (v == null || String(v).trim() === '') continue;
+    if (base[k] != null && String(base[k]).trim() !== '') continue;
+    base[k] = String(v).trim();
+    changed = true;
+  }
+  return { device: base, changed };
+}
+
+/** Đếm field dữ liệu (bỏ meta lastEdited*). */
+export function countEquipmentDataFields(device) {
+  if (!device || typeof device !== 'object') return 0;
+  return Object.keys(device).filter(
+    (k) =>
+      !k.startsWith('lastEdited') &&
+      device[k] != null &&
+      String(device[k]).trim() !== ''
+  ).length;
 }
 
 function escapeHtml(s) {
