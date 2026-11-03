@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=46';
+} from './config.js?v=47';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=46';
+} from './forecast.js?v=47';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=46';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=46';
+} from './stats.js?v=47';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=47';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -55,7 +55,7 @@ import {
   buildEquipmentFieldsHtml,
   readEquipmentFormValues,
   equipmentPayload,
-} from './equipment.js?v=46';
+} from './equipment.js?v=47';
 
 
 const app = initializeApp(firebaseConfig);
@@ -76,6 +76,7 @@ const db = getDatabase(app);
 const stationsRef = ref(db, 'stations');
 
 const state = {
+  equipmentByCsht: {},
   user: null,
   /** false đến khi Firebase báo auth state lần đầu */
   authReady: false,
@@ -246,7 +247,7 @@ function parseStation(key, raw) {
     mayNoLastAlertType: mayNo.lastAlertType || null,
     mayNoScAtMillis: toNum(mayNo.scAtMillis),
     deviceStatus: raw.deviceStatus || {},
-    equipment: normalizeEquipment(raw.equipment),
+    equipment: {},
     runs: extractMayNoRuns(raw.events || {}),
   };
 }
@@ -974,7 +975,7 @@ function renderStations() {
           <div class="station-kv-row station-kv-action">
             <div class="station-kv-text">
               <span class="station-kv-l">Thiết bị</span>
-              <strong class="station-kv-v">${escapeHtml(equipmentSummary(s.equipment))}</strong>
+              <strong class="station-kv-v">${escapeHtml(equipmentSummary(stationEquipmentSite(s)))}</strong>
             </div>
             <button type="button" class="btn-outline station-action-btn" data-action="equipment" data-key="${escapeAttr(
               s.stationKey
@@ -1398,6 +1399,13 @@ function openStationSheet(stationKey, mode) {
   if ((mode === 'station' || mode === 'delete') && !canManageStations()) {
     toast('Chỉ admin hoặc root được sửa/xóa trạm');
     return;
+  }
+  if (mode === 'equipment') {
+    const st = state.stations.find((x) => x.stationKey === stationKey);
+    if (!(st?.profile?.maCsht || '').trim()) {
+      toast('Trạm chưa có mã CSHT — gán CSHT trước khi cập nhật thiết bị');
+      return;
+    }
   }
   if (mode === 'delete') {
     deleteStation(stationKey);
@@ -1833,6 +1841,17 @@ async function saveStation() {
 }
 
 
+
+function stationEquipmentSite(station) {
+  const csht = (station?.profile?.maCsht || '').trim();
+  if (!csht) return null;
+  return state.equipmentByCsht[csht] || null;
+}
+
+function stationEquipment(station) {
+  return normalizeEquipment(stationEquipmentSite(station));
+}
+
 function ensureEquipmentDraft(station, sheet) {
   const needsInit =
     !equipmentDraft ||
@@ -1843,7 +1862,7 @@ function ensureEquipmentDraft(station, sheet) {
   if (!needsInit) return;
   const byType = {};
   for (const t of equipmentTypes()) {
-    const existing = (station.equipment && station.equipment[t.id]) || [];
+    const existing = (stationEquipment(station)[t.id]) || [];
     byType[t.id] = existing.map((d) => ({ ...d }));
   }
   const prefer =
@@ -1886,7 +1905,13 @@ function renderEquipmentEditor(station, forceFields = false) {
   const status = $('#eq-file-status');
   if (hint) {
     const csht = station.profile.maCsht || '—';
-    hint.textContent = `CSHT: ${csht}. Chỉ cập nhật chủng loại và thông số kỹ thuật (không đụng thông tin quản lý).`;
+    const site = stationEquipmentSite(station);
+    const geo =
+      site && site.lat != null && site.long != null
+        ? ` · LAT ${site.lat}, LONG ${site.long}`
+        : '';
+    const ten = site?.tenTram ? ` · ${site.tenTram}` : '';
+    hint.textContent = `CSHT: ${csht}${ten}${geo}. Chỉ cập nhật chủng loại và thông số kỹ thuật.`;
   }
   if (typeSel && typeSel.dataset.filled !== '1') {
     typeSel.innerHTML = equipmentTypes()
@@ -2015,12 +2040,20 @@ async function saveEquipment() {
   const payload = equipmentPayload(devices, who, state.user.uid, equipmentDraft.dirty ? 'file+manual' : 'manual');
   // Firebase: replace node for this type only
   try {
-    await set(ref(db, `stations/${key}/equipment/${typeId}`), {
-      devices: payload.devices,
-      lastEditedBy: who,
-      lastEditedByUid: state.user.uid,
-      lastEditedAt: serverTimestamp(),
-      source: payload.source,
+    const csht = (equipmentDraft.maCsht || '').trim();
+    if (!csht) {
+      toast('Trạm chưa có mã CSHT — không lưu được thiết bị');
+      return;
+    }
+    await update(ref(db, `equipment/${csht}`), {
+      maCsht: csht,
+      [typeId]: {
+        devices: payload.devices,
+        lastEditedBy: who,
+        lastEditedByUid: state.user.uid,
+        lastEditedAt: serverTimestamp(),
+        source: payload.source,
+      },
     });
     await update(ref(db, `stations/${key}/profile`), {
       lastEditedBy: who,
@@ -2221,6 +2254,11 @@ function bindStationsListener() {
       .sort((a, b) =>
         (a.profile.maTram || a.stationKey).localeCompare(b.profile.maTram || b.stationKey, 'vi')
       );
+    render();
+  });
+  onValue(ref(db, 'equipment'), (snap) => {
+    if (!state.user) return;
+    state.equipmentByCsht = snap.val() || {};
     render();
   });
 }

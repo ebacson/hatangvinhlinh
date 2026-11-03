@@ -1,5 +1,5 @@
-/** Quản lý thiết bị trạm — chỉ chủng loại + thông số kỹ thuật (theo ex.xlsx). */
-import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=46';
+/** Quản lý thiết bị trạm — root RTDB `equipment/{CSHT_…}` (chủng loại + thông số KT). */
+import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=47';
 
 const BASE = '/hatangvinhlinh';
 
@@ -14,10 +14,12 @@ export function equipmentTypeById(id) {
   return equipmentTypes().find((t) => t.id === id) || null;
 }
 
+const TYPE_IDS = new Set(equipmentTypes().map((t) => t.id));
+
 export async function loadEquipmentCatalog() {
   if (catalogCache) return catalogCache;
   if (!catalogPromise) {
-    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=46`)
+    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=47`)
       .then((r) => {
         if (!r.ok) throw new Error('Không tải được file thiết bị');
         return r.json();
@@ -42,15 +44,24 @@ export function catalogDevicesForCsht(catalog, maCsht, typeId) {
   return Array.isArray(list) ? list : [];
 }
 
-/** Chuẩn hoá equipment từ RTDB → { [typeId]: [deviceObj, ...] } */
+/** Chuẩn hoá nhánh thiết bị trong node CSHT → { [typeId]: [deviceObj, ...] } */
 export function normalizeEquipment(raw) {
   const out = {};
   if (!raw || typeof raw !== 'object') return out;
   for (const [typeId, node] of Object.entries(raw)) {
+    if (!TYPE_IDS.has(typeId)) continue;
     if (!node || typeof node !== 'object') continue;
     const devicesNode = node.devices && typeof node.devices === 'object' ? node.devices : node;
     const keys = Object.keys(devicesNode)
-      .filter((k) => k !== 'lastEditedBy' && k !== 'lastEditedByUid' && k !== 'lastEditedAt' && k !== 'updatedAt' && k !== 'source' && k !== 'devices')
+      .filter(
+        (k) =>
+          k !== 'lastEditedBy' &&
+          k !== 'lastEditedByUid' &&
+          k !== 'lastEditedAt' &&
+          k !== 'updatedAt' &&
+          k !== 'source' &&
+          k !== 'devices'
+      )
       .sort((a, b) => Number(a) - Number(b) || String(a).localeCompare(String(b)));
     const items = [];
     for (const k of keys) {
@@ -62,14 +73,21 @@ export function normalizeEquipment(raw) {
   return out;
 }
 
-export function equipmentSummary(equipment) {
-  const norm = normalizeEquipment(equipment);
+export function equipmentSummary(siteOrDevices) {
+  const site = siteOrDevices && typeof siteOrDevices === 'object' ? siteOrDevices : null;
+  if (!site) return 'Chưa có';
+  const ten = (site.tenTram || '').trim();
+  const norm = normalizeEquipment(site);
   const parts = [];
   for (const t of equipmentTypes()) {
     const n = (norm[t.id] || []).length;
     if (n) parts.push(`${t.title}: ${n}`);
   }
-  return parts.length ? parts.join(' · ') : 'Chưa có';
+  if (ten && parts.length) return `${ten} · ${parts.join(' · ')}`;
+  if (ten) return ten;
+  if (parts.length) return parts.join(' · ');
+  if (site.lat != null && site.long != null) return `${site.lat}, ${site.long}`;
+  return 'Chưa có';
 }
 
 export function buildEquipmentFieldsHtml(typeDef, values) {
