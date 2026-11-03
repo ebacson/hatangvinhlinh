@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=76';
+} from './config.js?v=77';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=76';
+} from './forecast.js?v=77';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=76';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=76';
+} from './stats.js?v=77';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=77';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -59,8 +59,8 @@ import {
   mapStationMayNoToMayPhatDien,
   mergeEquipmentDeviceFillEmpty,
   countEquipmentDataFields,
-} from './equipment.js?v=76';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=76';
+} from './equipment.js?v=77';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=77';
 
 
 const app = initializeApp(firebaseConfig);
@@ -1994,14 +1994,27 @@ async function syncAllMayNoStationsToEquipment() {
   return { updated, total: byCsht.size };
 }
 
-function equipmentDeviceCountLabel(site) {
+function equipmentDeviceCountParts(site) {
   const norm = normalizeEquipment(site);
   const parts = [];
   for (const t of equipmentTypes()) {
     const n = (norm[t.id] || []).length;
     if (n) parts.push(`${t.title}: ${n}`);
   }
+  return parts;
+}
+
+function equipmentDeviceCountLabel(site) {
+  const parts = equipmentDeviceCountParts(site);
   return parts.length ? parts.join(' · ') : 'Chưa có chủng loại/Thiết bị';
+}
+
+function equipmentDeviceCountHtml(site) {
+  const parts = equipmentDeviceCountParts(site);
+  if (!parts.length) return `<span class="eq-type-empty">Chưa có chủng loại/Thiết bị</span>`;
+  return `<ul class="eq-type-lines">${parts
+    .map((p) => `<li>${escapeHtml(p)}</li>`)
+    .join('')}</ul>`;
 }
 
 function equipmentSiteEditorLine(site) {
@@ -2221,13 +2234,13 @@ function renderEquipmentList() {
         r.lat != null && r.long != null
           ? `${escapeHtml(String(r.lat))}, ${escapeHtml(String(r.long))}`
           : '—';
-      const types = equipmentDeviceCountLabel(r.site);
+      const typeParts = equipmentDeviceCountParts(r.site);
       const editor = equipmentSiteEditorLine(r.site);
       const maExtra =
         r.maTrams.length > 1
           ? ` · +${r.maTrams.length - 1} mã`
           : '';
-      const hasDetail = types !== 'Chưa có chủng loại/Thiết bị';
+      const hasDetail = typeParts.length > 0;
       const expanded = !!(state.equipmentExpanded && state.equipmentExpanded[r.maCsht]);
       const inventory = hasDetail ? renderEquipmentInventoryHtml(r.site, r.maCsht) : '';
       const detailBtn = hasDetail
@@ -2247,10 +2260,10 @@ function renderEquipmentList() {
         <p class="station-name">${escapeHtml(r.tenTram || 'Chưa có tên')}</p>
         <p class="station-addr">${escapeHtml(r.maCsht)}${escapeHtml(maExtra)} · LAT/LONG: ${geo}</p>
         <div class="station-kv">
-          <div class="station-kv-row station-kv-action">
-            <div class="station-kv-text">
+          <div class="station-kv-row station-kv-action eq-kv-stack">
+            <div class="station-kv-text eq-kv-types">
               <span class="station-kv-l">Thiết bị</span>
-              <strong class="station-kv-v">${escapeHtml(types)}</strong>
+              <div class="station-kv-v eq-type-wrap">${equipmentDeviceCountHtml(r.site)}</div>
             </div>
             <div class="eq-card-actions">
               ${detailBtn}

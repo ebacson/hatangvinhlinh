@@ -916,6 +916,56 @@ main {
   flex: 0 0 auto;
 }
 
+.eq-type-wrap {
+  font-weight: 700;
+}
+
+.eq-type-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.eq-type-lines li {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #15283a;
+  line-height: 1.35;
+}
+
+.eq-type-empty {
+  font-size: 0.86rem;
+  font-weight: 650;
+  color: #6d8298;
+}
+
+.eq-kv-stack.station-kv-action {
+  align-items: start;
+}
+
+@media (max-width: 520px) {
+  .eq-kv-stack.station-kv-action {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .eq-kv-types.station-kv-text {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .eq-kv-stack .eq-card-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .eq-kv-stack .eq-card-actions .station-action-btn {
+    flex: 1 1 auto;
+  }
+}
+
 
 .stations-toolbar {
   margin-bottom: 14px;
