@@ -1,5 +1,5 @@
 /** Quản lý thiết bị trạm — root RTDB `equipment/{CSHT_…}` (chủng loại + thông số KT). */
-import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=70';
+import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=71';
 
 const BASE = '/hatangvinhlinh';
 
@@ -69,7 +69,7 @@ const TYPE_IDS = new Set(equipmentTypes().map((t) => t.id));
 export async function loadEquipmentCatalog() {
   if (catalogCache) return catalogCache;
   if (!catalogPromise) {
-    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=70`)
+    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=71`)
       .then((r) => {
         if (!r.ok) throw new Error('Không tải được file thiết bị');
         return r.json();
@@ -156,7 +156,7 @@ export function buildEquipmentFieldsHtml(typeDef, values) {
     return `<div class="eq-input-with-action">
                 ${input}
                 <button type="button" class="btn-outline eq-qr-btn" data-eq-qr="${escapeAttr(f.key)}"
-                  title="Quét mã QR" aria-label="Quét mã QR cho ${escapeAttr(f.label)}">QR</button>
+                  title="Quét QR / barcode" aria-label="Quét mã cho ${escapeAttr(f.label)}">Quét</button>
               </div>`;
   };
   const block = (title, fields) => {

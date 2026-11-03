@@ -2350,9 +2350,18 @@ main {
 
 .qr-scan-hint,
 .qr-scan-status {
-  padding: 8px 14px 12px;
+  padding: 8px 14px 4px;
   margin: 0;
   color: #a9b7c7;
+}
+
+.qr-scan-status {
+  padding-bottom: 12px;
+}
+
+.qr-scan-status:not([hidden]) + .qr-scan-hint,
+.qr-scan-hint + .qr-scan-status:not([hidden]) {
+  padding-top: 0;
 }
 
 [hidden] {

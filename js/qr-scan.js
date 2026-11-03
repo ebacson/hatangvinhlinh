@@ -1,4 +1,20 @@
-/** Quét mã QR bằng camera (BarcodeDetector hoặc jsQR). */
+/** Quét QR / barcode bằng camera (BarcodeDetector, fallback jsQR cho QR). */
+
+const BARCODE_FORMATS = [
+  'qr_code',
+  'code_128',
+  'code_39',
+  'code_93',
+  'ean_13',
+  'ean_8',
+  'upc_a',
+  'upc_e',
+  'itf',
+  'codabar',
+  'data_matrix',
+  'pdf417',
+  'aztec',
+];
 
 let active = null;
 
@@ -10,20 +26,27 @@ function ensureOverlay() {
   el.className = 'qr-scan-overlay';
   el.hidden = true;
   el.innerHTML = `
-    <div class="qr-scan-panel" role="dialog" aria-modal="true" aria-label="Quét mã QR">
+    <div class="qr-scan-panel" role="dialog" aria-modal="true" aria-label="Quét mã">
       <div class="qr-scan-head">
-        <strong>Quét mã QR</strong>
+        <strong>Quét mã</strong>
         <button type="button" class="btn-text" data-qr-close>Đóng</button>
       </div>
       <div class="qr-scan-video-wrap">
         <video playsinline muted autoplay></video>
         <div class="qr-scan-frame" aria-hidden="true"></div>
       </div>
-      <p class="qr-scan-hint muted tiny">Đưa mã QR vào khung hình</p>
-      <p class="qr-scan-status muted tiny" data-qr-status></p>
+      <p class="qr-scan-hint muted tiny" data-qr-hint>Đưa mã QR / barcode vào khung hình</p>
+      <p class="qr-scan-status muted tiny" data-qr-status hidden></p>
     </div>`;
   document.body.appendChild(el);
   return el;
+}
+
+function setStatus(el, text) {
+  if (!el) return;
+  const msg = String(text || '').trim();
+  el.textContent = msg;
+  el.hidden = !msg;
 }
 
 function loadJsQR() {
@@ -36,9 +59,30 @@ function loadJsQR() {
       if (typeof window.jsQR === 'function') resolve(window.jsQR);
       else reject(new Error('jsQR không tải được'));
     };
-    s.onerror = () => reject(new Error('Không tải được thư viện quét QR'));
+    s.onerror = () => reject(new Error('Không tải được thư viện quét mã'));
     document.head.appendChild(s);
   });
+}
+
+async function createBarcodeDetector() {
+  if (!('BarcodeDetector' in window)) return null;
+  try {
+    let formats = BARCODE_FORMATS;
+    if (typeof window.BarcodeDetector.getSupportedFormats === 'function') {
+      const supported = await window.BarcodeDetector.getSupportedFormats();
+      if (Array.isArray(supported) && supported.length) {
+        formats = BARCODE_FORMATS.filter((f) => supported.includes(f));
+        if (!formats.length) formats = supported.slice();
+      }
+    }
+    return new window.BarcodeDetector({ formats });
+  } catch {
+    try {
+      return new window.BarcodeDetector();
+    } catch {
+      return null;
+    }
+  }
 }
 
 function stopStream(stream) {
@@ -72,7 +116,7 @@ function cleanupActive() {
 }
 
 /**
- * Mở camera và quét QR. Trả về chuỗi khi đọc được, hoặc null nếu đóng.
+ * Mở camera và quét QR/barcode. Trả về chuỗi khi đọc được, hoặc null nếu đóng.
  * @returns {Promise<string|null>}
  */
 export function openQrScanner() {
@@ -80,9 +124,11 @@ export function openQrScanner() {
   const overlay = ensureOverlay();
   const video = overlay.querySelector('video');
   const status = overlay.querySelector('[data-qr-status]');
+  const hint = overlay.querySelector('[data-qr-hint]');
   const closeBtn = overlay.querySelector('[data-qr-close]');
   overlay.hidden = false;
-  if (status) status.textContent = 'Đang mở camera…';
+  if (hint) hint.textContent = 'Đưa mã QR / barcode vào khung hình';
+  setStatus(status, 'Đang mở camera…');
 
   return new Promise(async (resolve) => {
     let settled = false;
@@ -118,14 +164,11 @@ export function openQrScanner() {
         throw new Error('Trình duyệt không hỗ trợ camera');
       }
 
-      if ('BarcodeDetector' in window) {
-        try {
-          detector = new window.BarcodeDetector({ formats: ['qr_code'] });
-        } catch {
-          detector = null;
-        }
+      detector = await createBarcodeDetector();
+      if (!detector) {
+        jsQR = await loadJsQR();
+        if (hint) hint.textContent = 'Đưa mã QR vào khung hình (barcode cần Chrome/Safari mới)';
       }
-      if (!detector) jsQR = await loadJsQR();
 
       stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
@@ -142,7 +185,7 @@ export function openQrScanner() {
       if (active) active.stream = stream;
       video.srcObject = stream;
       await video.play();
-      if (status) status.textContent = 'Đưa mã QR vào khung hình';
+      setStatus(status, '');
 
       const tick = async () => {
         if (settled) return;
@@ -185,7 +228,7 @@ export function openQrScanner() {
         err?.name === 'NotAllowedError'
           ? 'Chưa được cấp quyền camera'
           : err?.message || 'Không mở được camera';
-      if (status) status.textContent = msg;
+      setStatus(status, msg);
       setTimeout(() => finish(null), 1600);
     }
   });

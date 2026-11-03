@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=70';
+} from './config.js?v=71';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=70';
+} from './forecast.js?v=71';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=70';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=70';
+} from './stats.js?v=71';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=71';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -56,8 +56,8 @@ import {
   equipmentUnitOptionLabel,
   equipmentTypeMeta,
   equipmentFilledFields,
-} from './equipment.js?v=70';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=70';
+} from './equipment.js?v=71';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=71';
 
 
 const app = initializeApp(firebaseConfig);
@@ -2662,7 +2662,7 @@ function bindEvents() {
       if (raw) {
         input.value = raw;
         input.dispatchEvent(new Event('input', { bubbles: true }));
-        toast('Đã quét serial từ QR');
+        toast('Đã quét serial từ mã');
         input.focus();
       }
     } finally {
