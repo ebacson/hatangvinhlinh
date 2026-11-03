@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=51';
+} from './config.js?v=52';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=51';
+} from './forecast.js?v=52';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=51';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=51';
+} from './stats.js?v=52';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=52';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -54,7 +54,7 @@ import {
   buildEquipmentFieldsHtml,
   readEquipmentFormValues,
   equipmentPayload,
-} from './equipment.js?v=51';
+} from './equipment.js?v=52';
 
 
 const app = initializeApp(firebaseConfig);
@@ -1491,8 +1491,8 @@ function renderDetail() {
       badge.classList.toggle('is-station', false);
     }
     const site = state.equipmentByCsht[csht] || { maCsht: csht };
-    $('#detail-title').textContent = csht;
-    $('#detail-subtitle').textContent = site.tenTram || '—';
+    $('#detail-title').textContent = site.maTram || csht;
+    $('#detail-subtitle').textContent = [site.tenTram, csht].filter(Boolean).join(' · ') || '—';
     ensureEquipmentDraft(csht, sheet);
     renderEquipmentEditor(csht);
     if (!equipmentCatalog) {
@@ -1874,17 +1874,28 @@ function equipmentDeviceCountLabel(site) {
 
 function filteredEquipmentSites() {
   const q = state.equipmentQuery.trim().toLowerCase();
-  const rows = Object.entries(state.equipmentByCsht || {}).map(([maCsht, site]) => ({
-    maCsht,
-    tenTram: (site && site.tenTram) || '',
-    lat: site?.lat ?? null,
-    long: site?.long ?? null,
-    site: site || {},
-  }));
-  rows.sort((a, b) => a.maCsht.localeCompare(b.maCsht, 'vi'));
+  const rows = Object.entries(state.equipmentByCsht || {}).map(([maCsht, site]) => {
+    const maTrams = Array.isArray(site?.maTrams)
+      ? site.maTrams.filter(Boolean).map(String)
+      : site?.maTram
+        ? [String(site.maTram)]
+        : [];
+    return {
+      maCsht,
+      maTram: (site && site.maTram) || maTrams[0] || '',
+      maTrams,
+      tenTram: (site && site.tenTram) || '',
+      lat: site?.lat ?? null,
+      long: site?.long ?? null,
+      site: site || {},
+    };
+  });
+  rows.sort((a, b) =>
+    (a.maTram || a.maCsht).localeCompare(b.maTram || b.maCsht, 'vi')
+  );
   if (!q) return rows;
   return rows.filter((r) => {
-    const hay = `${r.maCsht} ${r.tenTram}`.toLowerCase();
+    const hay = `${r.maCsht} ${r.maTram} ${r.maTrams.join(' ')} ${r.tenTram}`.toLowerCase();
     return hay.includes(q);
   });
 }
@@ -1915,15 +1926,19 @@ function renderEquipmentList() {
           ? `${escapeHtml(String(r.lat))}, ${escapeHtml(String(r.long))}`
           : '—';
       const types = equipmentDeviceCountLabel(r.site);
+      const maExtra =
+        r.maTrams.length > 1
+          ? ` · +${r.maTrams.length - 1} mã`
+          : '';
       return `<article class="station-card" data-csht="${escapeAttr(r.maCsht)}" style="--i:${index}">
         <div class="station-accent" aria-hidden="true"></div>
         <header class="station-top">
           <div class="station-id">
-            <span class="station-code">${escapeHtml(r.maCsht)}</span>
+            <span class="station-code">${escapeHtml(r.maTram || r.maCsht)}</span>
           </div>
         </header>
         <p class="station-name">${escapeHtml(r.tenTram || 'Chưa có tên')}</p>
-        <p class="station-addr">LAT/LONG: ${geo}</p>
+        <p class="station-addr">${escapeHtml(r.maCsht)}${escapeHtml(maExtra)} · LAT/LONG: ${geo}</p>
         <div class="station-kv">
           <div class="station-kv-row station-kv-action">
             <div class="station-kv-text">
@@ -2016,7 +2031,8 @@ function renderEquipmentEditor(csht, forceFields = false) {
     const geo =
       site.lat != null && site.long != null ? ` · LAT ${site.lat}, LONG ${site.long}` : '';
     const ten = site.tenTram ? ` · ${site.tenTram}` : '';
-    hint.textContent = `CSHT: ${key}${ten}${geo}. Chỉ cập nhật chủng loại và thông số kỹ thuật.`;
+    const ma = site.maTram ? ` · ${site.maTram}` : '';
+    hint.textContent = `CSHT: ${key}${ma}${ten}${geo}. Chỉ cập nhật chủng loại và thông số kỹ thuật.`;
   }
   if (typeSel && typeSel.dataset.filled !== '1') {
     typeSel.innerHTML = equipmentTypes()
@@ -2141,6 +2157,8 @@ async function saveEquipment() {
     const site = equipmentSiteByCsht(csht) || {};
     await update(ref(db, `equipment/${csht}`), {
       maCsht: csht,
+      maTram: site.maTram || null,
+      maTrams: site.maTrams || null,
       tenTram: site.tenTram || null,
       lat: site.lat ?? null,
       long: site.long ?? null,
