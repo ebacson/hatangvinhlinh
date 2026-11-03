@@ -370,11 +370,6 @@ export const EQUIPMENT_SCHEMA = {
           "group": "type"
         },
         {
-          "key": "ma_thiet_bi_ip",
-          "label": "Mã thiết bị/IP",
-          "group": "tech"
-        },
-        {
           "key": "serial",
           "label": "Serial",
           "group": "tech"
@@ -399,6 +394,7 @@ export const EQUIPMENT_SCHEMA = {
           "label": "Công nghệ Accu",
           "group": "tech"
         },
+
         {
           "key": "dung_luong_binh",
           "label": "Dung lượng bình",
