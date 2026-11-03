@@ -1,5 +1,5 @@
 /** Quản lý thiết bị trạm — root RTDB `equipment/{CSHT_…}` (chủng loại + thông số KT). */
-import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=57';
+import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=58';
 
 const BASE = '/hatangvinhlinh';
 
@@ -14,12 +14,36 @@ export function equipmentTypeById(id) {
   return equipmentTypes().find((t) => t.id === id) || null;
 }
 
+/** Nhãn ngắn cho dropdown thiết bị # theo loại. */
+const UNIT_LABELS = {
+  may_phat_dien: 'MPD',
+  may_nan: 'Máy nắn',
+  dieu_hoa: 'DH',
+  binh_acquy: 'Bình (tổ)',
+  tu_pp_ac: 'Tủ AC',
+  thiet_bi_chuyen_doi: 'ATS',
+  thiet_bi_cat_loc_set: 'CLS',
+  he_thong_pin_mat_troi: 'Pin MT',
+  binh_chua_chay: 'BCC',
+  he_thong_bao_chay: 'Báo cháy',
+  tu_pp_dc: 'Tủ DC',
+  he_thong_giam_sat: 'GS',
+};
+
+export function equipmentUnitLabel(typeId) {
+  return UNIT_LABELS[typeId] || 'Thiết bị';
+}
+
+export function equipmentUnitOptionLabel(typeId, index) {
+  return `${equipmentUnitLabel(typeId)} ${Number(index) + 1}`;
+}
+
 const TYPE_IDS = new Set(equipmentTypes().map((t) => t.id));
 
 export async function loadEquipmentCatalog() {
   if (catalogCache) return catalogCache;
   if (!catalogPromise) {
-    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=57`)
+    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=58`)
       .then((r) => {
         if (!r.ok) throw new Error('Không tải được file thiết bị');
         return r.json();

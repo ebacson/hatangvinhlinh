@@ -1,27 +1,27 @@
-const CACHE = 'htvl-v57';
+const CACHE = 'htvl-v58';
 const BASE = '/hatangvinhlinh';
 const ASSETS = [
   `${BASE}/`,
   `${BASE}/index.html`,
-  `${BASE}/index.html?v=57`,
+  `${BASE}/index.html?v=58`,
   `${BASE}/css/app.css`,
-  `${BASE}/css/app.css?v=57`,
+  `${BASE}/css/app.css?v=58`,
   `${BASE}/js/app.js`,
-  `${BASE}/js/app.js?v=57`,
+  `${BASE}/js/app.js?v=58`,
   `${BASE}/js/config.js`,
-  `${BASE}/js/config.js?v=57`,
+  `${BASE}/js/config.js?v=58`,
   `${BASE}/js/forecast.js`,
-  `${BASE}/js/forecast.js?v=57`,
+  `${BASE}/js/forecast.js?v=58`,
   `${BASE}/js/stats.js`,
-  `${BASE}/js/stats.js?v=57`,
+  `${BASE}/js/stats.js?v=58`,
   `${BASE}/js/exportExcel.js`,
-  `${BASE}/js/exportExcel.js?v=57`,
+  `${BASE}/js/exportExcel.js?v=58`,
   `${BASE}/js/equipment.js`,
-  `${BASE}/js/equipment.js?v=57`,
+  `${BASE}/js/equipment.js?v=58`,
   `${BASE}/js/equipment-schema.js`,
-  `${BASE}/js/equipment-schema.js?v=57`,
+  `${BASE}/js/equipment-schema.js?v=58`,
   `${BASE}/js/equipment-data.json`,
-  `${BASE}/js/equipment-data.json?v=57`,
+  `${BASE}/js/equipment-data.json?v=58`,
   `${BASE}/manifest.webmanifest`,
   `${BASE}/icons/icon-192.png`,
   `${BASE}/icons/icon-512.png`,
@@ -89,7 +89,7 @@ self.addEventListener('fetch', (event) => {
         .catch(() =>
           caches
             .match(req)
-            .then((c) => c || caches.match(`${BASE}/index.html`) || caches.match(`${BASE}/index.html?v=57`))
+            .then((c) => c || caches.match(`${BASE}/index.html`) || caches.match(`${BASE}/index.html?v=58`))
         )
     );
     return;

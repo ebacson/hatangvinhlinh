@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=57';
+} from './config.js?v=58';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=57';
+} from './forecast.js?v=58';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=57';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=57';
+} from './stats.js?v=58';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=58';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -52,7 +52,9 @@ import {
   buildEquipmentFieldsHtml,
   readEquipmentFormValues,
   equipmentPayload,
-} from './equipment.js?v=57';
+  equipmentUnitLabel,
+  equipmentUnitOptionLabel,
+} from './equipment.js?v=58';
 
 
 const app = initializeApp(firebaseConfig);
@@ -2129,9 +2131,14 @@ function renderEquipmentEditor(csht, forceFields = false) {
     equipmentDraft.byType[equipmentDraft.typeId] = list;
   }
   if (equipmentDraft.index >= list.length) equipmentDraft.index = 0;
+  const unit = equipmentUnitLabel(equipmentDraft.typeId);
+  const idxLabel = $('#eq-device-index-label');
+  if (idxLabel) idxLabel.textContent = `${unit} #`;
+  const addBtn = $('#eq-add-device');
+  if (addBtn) addBtn.textContent = `+ Thêm ${unit}`;
   if (idxSel) {
     idxSel.innerHTML = list
-      .map((_, i) => `<option value="${i}">Thiết bị ${i + 1}</option>`)
+      .map((_, i) => `<option value="${i}">${escapeHtml(equipmentUnitOptionLabel(equipmentDraft.typeId, i))}</option>`)
       .join('');
     idxSel.value = String(equipmentDraft.index);
   }
