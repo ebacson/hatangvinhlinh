@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=68';
+} from './config.js?v=69';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=68';
+} from './forecast.js?v=69';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=68';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=68';
+} from './stats.js?v=69';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=69';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -56,7 +56,8 @@ import {
   equipmentUnitOptionLabel,
   equipmentTypeMeta,
   equipmentFilledFields,
-} from './equipment.js?v=68';
+} from './equipment.js?v=69';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=69';
 
 
 const app = initializeApp(firebaseConfig);
@@ -2648,16 +2649,42 @@ function bindEvents() {
   $('#eq-add-device')?.addEventListener('click', addEquipmentDevice);
   $('#eq-delete-device')?.addEventListener('click', deleteEquipmentDeviceFromDraft);
   $('#eq-delete-type')?.addEventListener('click', deleteEquipmentTypeFromDraft);
+  $('#eq-fields')?.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-eq-qr]');
+    if (!btn) return;
+    const key = btn.getAttribute('data-eq-qr');
+    if (!key) return;
+    const input = $(`#eq-f-${CSS.escape(key)}`) || $(`[data-eq-key="${CSS.escape(key)}"]`);
+    if (!input) return;
+    btn.disabled = true;
+    try {
+      const raw = await openQrScanner();
+      if (raw) {
+        input.value = raw;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        toast('Đã quét serial từ QR');
+        input.focus();
+      }
+    } finally {
+      btn.disabled = false;
+    }
+  });
   $('#detail-delete-station')?.addEventListener('click', () => {
     deleteStation(state.selectedKey);
   });
 
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeDetail();
+    if (e.key !== 'Escape') return;
+    if (isQrScannerOpen()) {
+      closeQrScanner();
+      return;
+    }
+    closeDetail();
   });
 }
 
 function closeDetail() {
+  closeQrScanner();
   state.selectedKey = null;
   state.selectedCsht = null;
   state.sheetMode = null;

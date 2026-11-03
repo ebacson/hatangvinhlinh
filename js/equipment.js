@@ -1,5 +1,5 @@
 /** Quản lý thiết bị trạm — root RTDB `equipment/{CSHT_…}` (chủng loại + thông số KT). */
-import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=68';
+import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=69';
 
 const BASE = '/hatangvinhlinh';
 
@@ -69,7 +69,7 @@ const TYPE_IDS = new Set(equipmentTypes().map((t) => t.id));
 export async function loadEquipmentCatalog() {
   if (catalogCache) return catalogCache;
   if (!catalogPromise) {
-    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=68`)
+    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=69`)
       .then((r) => {
         if (!r.ok) throw new Error('Không tải được file thiết bị');
         return r.json();
@@ -140,10 +140,25 @@ export function equipmentSummary(siteOrDevices) {
   return 'Chưa có';
 }
 
+function isSerialField(f) {
+  return /serial/i.test(f?.key || '') || /^serial\b/i.test(f?.label || '');
+}
+
 export function buildEquipmentFieldsHtml(typeDef, values) {
   const vals = values || {};
   const typeFields = typeDef.fields.filter((f) => f.group === 'type');
   const techFields = typeDef.fields.filter((f) => f.group === 'tech');
+  const inputFor = (f) => {
+    const input = `<input id="eq-f-${escapeAttr(f.key)}" data-eq-key="${escapeAttr(f.key)}" type="text"
+                value="${escapeAttr(vals[f.key] == null ? '' : String(vals[f.key]))}"
+                autocomplete="off" />`;
+    if (!isSerialField(f)) return input;
+    return `<div class="eq-input-with-action">
+                ${input}
+                <button type="button" class="btn-outline eq-qr-btn" data-eq-qr="${escapeAttr(f.key)}"
+                  title="Quét mã QR" aria-label="Quét mã QR cho ${escapeAttr(f.label)}">QR</button>
+              </div>`;
+  };
   const block = (title, fields) => {
     if (!fields.length) return '';
     return `
@@ -155,9 +170,7 @@ export function buildEquipmentFieldsHtml(typeDef, values) {
               (f) => `
             <div class="field field-span">
               <label for="eq-f-${escapeAttr(f.key)}">${escapeHtml(f.label)}</label>
-              <input id="eq-f-${escapeAttr(f.key)}" data-eq-key="${escapeAttr(f.key)}" type="text"
-                value="${escapeAttr(vals[f.key] == null ? '' : String(vals[f.key]))}"
-                autocomplete="off" />
+              ${inputFor(f)}
             </div>`
             )
             .join('')}
