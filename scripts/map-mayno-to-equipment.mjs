@@ -137,7 +137,6 @@ async function main() {
     }
 
     payload[csht] = {
-      ...(site.maCsht ? {} : { maCsht: csht }),
       may_phat_dien: {
         devices,
         lastEditedBy: 'map-mayno',
@@ -146,6 +145,7 @@ async function main() {
         mappedFromStation: stationKey,
       },
     };
+    if (!site.maCsht) payload[csht].maCsht = csht;
   }
 
   const samples = Object.keys(payload).slice(0, 5);
@@ -159,19 +159,18 @@ async function main() {
     return;
   }
 
+  // PATCH từng CSHT để merge nông đúng cấp (tránh ghi đè cả node khi PATCH /equipment.json)
   const keys = Object.keys(payload);
-  const CHUNK = 80;
-  for (let i = 0; i < keys.length; i += CHUNK) {
-    const body = {};
-    for (const k of keys.slice(i, i + CHUNK)) body[k] = payload[k];
-    // Deep merge via PATCH on equipment root — nested may_phat_dien replaces that child
-    const res = await fetch(`${DB}/equipment.json`, {
+  let i = 0;
+  for (const csht of keys) {
+    const res = await fetch(`${DB}/equipment/${encodeURIComponent(csht)}.json`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify(payload[csht]),
     });
-    if (!res.ok) throw new Error(`PATCH ${i}: ${res.status} ${await res.text()}`);
-    console.log(`wrote ${Math.min(i + CHUNK, keys.length)}/${keys.length}`);
+    if (!res.ok) throw new Error(`PATCH ${csht}: ${res.status} ${await res.text()}`);
+    i += 1;
+    if (i % 40 === 0 || i === keys.length) console.log(`wrote ${i}/${keys.length}`);
   }
   console.log('done');
 }

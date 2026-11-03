@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=73';
+} from './config.js?v=74';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=73';
+} from './forecast.js?v=74';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=73';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=73';
+} from './stats.js?v=74';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=74';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -59,8 +59,8 @@ import {
   mapStationMayNoToMayPhatDien,
   mergeEquipmentDeviceFillEmpty,
   countEquipmentDataFields,
-} from './equipment.js?v=73';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=73';
+} from './equipment.js?v=74';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=74';
 
 
 const app = initializeApp(firebaseConfig);
@@ -1884,6 +1884,24 @@ function equipmentSiteByCsht(csht) {
   return state.equipmentByCsht[key] || null;
 }
 
+/** Meta CSHT khi update nhánh thiết bị — chỉ ghi field đang có giá trị (tránh xóa tenTram/maTram bằng null). */
+function equipmentSiteMetaPatch(csht, site, who) {
+  const key = String(csht || '').trim();
+  const s = site && typeof site === 'object' ? site : {};
+  const patch = {
+    maCsht: key,
+    lastEditedBy: who,
+    lastEditedByUid: state.user.uid,
+    lastEditedAt: serverTimestamp(),
+  };
+  if (s.maTram != null && String(s.maTram).trim() !== '') patch.maTram = s.maTram;
+  if (Array.isArray(s.maTrams) && s.maTrams.length) patch.maTrams = s.maTrams;
+  if (s.tenTram != null && String(s.tenTram).trim() !== '') patch.tenTram = s.tenTram;
+  if (s.lat != null && Number.isFinite(Number(s.lat))) patch.lat = Number(s.lat);
+  if (s.long != null && Number.isFinite(Number(s.long))) patch.long = Number(s.long);
+  return patch;
+}
+
 function equipmentDevicesByCsht(csht) {
   return normalizeEquipment(equipmentSiteByCsht(csht));
 }
@@ -1931,15 +1949,7 @@ async function syncMayNoProfileToEquipment(csht, profile, source = 'station-mayn
   if (!devices.length) return false;
   const payload = equipmentPayload(devices, who, state.user.uid, source);
   await update(ref(db, `equipment/${key}`), {
-    maCsht: key,
-    maTram: site.maTram || null,
-    maTrams: site.maTrams || null,
-    tenTram: site.tenTram || null,
-    lat: site.lat ?? null,
-    long: site.long ?? null,
-    lastEditedBy: who,
-    lastEditedByUid: state.user.uid,
-    lastEditedAt: serverTimestamp(),
+    ...equipmentSiteMetaPatch(key, site, who),
     may_phat_dien: {
       devices: payload.devices,
       lastEditedBy: who,
@@ -2464,15 +2474,7 @@ async function deleteEquipmentDeviceDirect(maCsht, typeId, index) {
   const payload = equipmentPayload(cleanDevices, who, state.user.uid, 'manual');
   try {
     await update(ref(db, `equipment/${csht}`), {
-      maCsht: csht,
-      maTram: site.maTram || null,
-      maTrams: site.maTrams || null,
-      tenTram: site.tenTram || null,
-      lat: site.lat ?? null,
-      long: site.long ?? null,
-      lastEditedBy: who,
-      lastEditedByUid: state.user.uid,
-      lastEditedAt: serverTimestamp(),
+      ...equipmentSiteMetaPatch(csht, site, who),
       [typeId]: {
         devices: payload.devices,
         lastEditedBy: who,
@@ -2520,15 +2522,7 @@ async function saveEquipment() {
   try {
     const site = equipmentSiteByCsht(csht) || {};
     await update(ref(db, `equipment/${csht}`), {
-      maCsht: csht,
-      maTram: site.maTram || null,
-      maTrams: site.maTrams || null,
-      tenTram: site.tenTram || null,
-      lat: site.lat ?? null,
-      long: site.long ?? null,
-      lastEditedBy: who,
-      lastEditedByUid: state.user.uid,
-      lastEditedAt: serverTimestamp(),
+      ...equipmentSiteMetaPatch(csht, site, who),
       [typeId]: {
         devices: payload.devices,
         lastEditedBy: who,
