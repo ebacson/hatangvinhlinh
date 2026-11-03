@@ -315,7 +315,7 @@ export const EQUIPMENT_SCHEMA = {
         },
         {
           "key": "cong_nghe_thong_thuong_chinh_xac_treo_tuong_thoi",
-          "label": "Công nghệ (thông thường, chính xác..., treo tường, thổi sàn...",
+          "label": "Công nghệ (Thông thường/ Inverter)",
           "group": "tech"
         },
         {
