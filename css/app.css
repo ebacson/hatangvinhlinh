@@ -803,6 +803,104 @@ main {
   width: 100%;
 }
 
+.eq-inventory {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.eq-type-block {
+  border: 1px solid #e0e8f0;
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px 10px;
+}
+
+.eq-type-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.eq-type-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #1a3448;
+}
+
+.eq-type-meta {
+  font-size: 0.72rem;
+  color: #6d8298;
+  text-align: right;
+}
+
+.eq-device-row {
+  border-top: 1px solid #eef3f8;
+  padding: 8px 0 4px;
+}
+
+.eq-device-row:first-of-type {
+  border-top: 0;
+  padding-top: 2px;
+}
+
+.eq-device-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #243447;
+  margin-bottom: 4px;
+}
+
+.eq-device-fields {
+  display: grid;
+  gap: 2px 8px;
+  margin: 0 0 8px;
+}
+
+.eq-device-fields div {
+  display: grid;
+  grid-template-columns: minmax(5.5rem, 38%) 1fr;
+  gap: 6px;
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.eq-device-fields dt {
+  color: #6d8298;
+  font-weight: 650;
+}
+
+.eq-device-fields dd {
+  margin: 0;
+  color: #15283a;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.eq-device-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.eq-device-actions .btn-outline,
+.eq-device-actions .btn-text {
+  min-height: 32px;
+  padding: 6px 10px;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.eq-card-footer {
+  margin-top: 8px;
+  font-size: 0.72rem;
+  color: #6d8298;
+}
+
 .stations-toolbar {
   margin-bottom: 14px;
 }

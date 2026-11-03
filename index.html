@@ -18,7 +18,7 @@
       href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700&family=Sora:wght@600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="css/app.css?v=58" />
+    <link rel="stylesheet" href="css/app.css?v=59" />
   </head>
   <body>
     <div id="boot-screen" class="boot-screen" role="status" aria-live="polite">
@@ -439,6 +439,7 @@
           <section class="sheet-block">
             <h3 class="sheet-block-title">Thiết bị trạm</h3>
             <p class="muted tiny" id="eq-csht-hint">Chỉ cập nhật chủng loại và thông số kỹ thuật.</p>
+            <p class="sheet-meta" id="eq-editor-meta" hidden></p>
             <div class="field-grid">
               <div class="field">
                 <label for="eq-type">Loại thiết bị</label>
@@ -450,11 +451,13 @@
               </div>
               <div class="field field-span eq-toolbar">
                 <button type="button" class="btn-text" id="eq-add-device">+ Thêm thiết bị</button>
+                <button type="button" class="btn-text danger" id="eq-delete-device">Xóa thiết bị này</button>
               </div>
             </div>
           </section>
           <div id="eq-fields"></div>
-          <div class="sheet-actions">
+          <div class="sheet-actions sheet-actions-split">
+            <button type="button" class="btn-text danger" id="eq-delete-type" hidden>Xóa cả loại</button>
             <button type="button" class="btn sheet-save" id="detail-save-equipment">Lưu thiết bị</button>
           </div>
         </div>
@@ -537,6 +540,6 @@
       <button type="button" id="update-reload" class="btn update-banner-btn">Cập nhật ngay</button>
     </div>
 
-    <script type="module" src="js/app.js?v=58"></script>
+    <script type="module" src="js/app.js?v=59"></script>
   </body>
 </html>

@@ -1,5 +1,5 @@
 /** Quản lý thiết bị trạm — root RTDB `equipment/{CSHT_…}` (chủng loại + thông số KT). */
-import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=58';
+import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=59';
 
 const BASE = '/hatangvinhlinh';
 
@@ -38,12 +38,38 @@ export function equipmentUnitOptionLabel(typeId, index) {
   return `${equipmentUnitLabel(typeId)} ${Number(index) + 1}`;
 }
 
+/** Meta cập nhật theo loại thiết bị (từ node RTDB). */
+export function equipmentTypeMeta(site, typeId) {
+  const node = site && typeof site === 'object' ? site[typeId] : null;
+  if (!node || typeof node !== 'object') {
+    return { lastEditedBy: null, lastEditedByUid: null, lastEditedAt: null };
+  }
+  return {
+    lastEditedBy: node.lastEditedBy || site.lastEditedBy || null,
+    lastEditedByUid: node.lastEditedByUid || site.lastEditedByUid || null,
+    lastEditedAt: node.lastEditedAt ?? site.lastEditedAt ?? null,
+  };
+}
+
+/** Các trường đã có giá trị — ưu tiên chủng loại rồi TSKT. */
+export function equipmentFilledFields(typeDef, device, limit = 8) {
+  if (!typeDef || !device) return [];
+  const out = [];
+  for (const f of typeDef.fields) {
+    const v = device[f.key];
+    if (v == null || String(v).trim() === '') continue;
+    out.push({ key: f.key, label: f.label, value: String(v).trim(), group: f.group });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
 const TYPE_IDS = new Set(equipmentTypes().map((t) => t.id));
 
 export async function loadEquipmentCatalog() {
   if (catalogCache) return catalogCache;
   if (!catalogPromise) {
-    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=58`)
+    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=59`)
       .then((r) => {
         if (!r.ok) throw new Error('Không tải được file thiết bị');
         return r.json();
