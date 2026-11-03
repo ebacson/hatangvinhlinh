@@ -670,14 +670,14 @@ export const EQUIPMENT_SCHEMA = {
           "group": "tech"
         },
         {
-          "key": "so_kg_khi_xuat_xuong",
-          "label": "SỐ KG khi xuất xưởng",
-          "group": "tech"
-        },
-        {
           "key": "loai_binh_chua_chay",
           "label": "Loại bình chữa cháy",
           "group": "type"
+        },
+        {
+          "key": "so_kg_khi_xuat_xuong",
+          "label": "SỐ KG khi xuất xưởng",
+          "group": "tech"
         },
         {
           "key": "so_kg_sau_khi_can",
