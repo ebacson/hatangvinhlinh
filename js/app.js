@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=71';
+} from './config.js?v=72';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=71';
+} from './forecast.js?v=72';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=71';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=71';
+} from './stats.js?v=72';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=72';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -56,8 +56,8 @@ import {
   equipmentUnitOptionLabel,
   equipmentTypeMeta,
   equipmentFilledFields,
-} from './equipment.js?v=71';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=71';
+} from './equipment.js?v=72';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=72';
 
 
 const app = initializeApp(firebaseConfig);
@@ -2246,15 +2246,6 @@ function renderEquipmentEditor(csht, forceFields = false) {
       metaEl.textContent = '';
     }
   }
-  const delTypeBtn = $('#eq-delete-type');
-  if (delTypeBtn) {
-    const has = (equipmentDraft.byType[equipmentDraft.typeId] || []).some(
-      (d) => d && Object.keys(d).some((k) => !k.startsWith('lastEdited') && d[k] != null && String(d[k]).trim() !== '')
-    );
-    delTypeBtn.hidden = !has;
-    const t = equipmentTypeById(equipmentDraft.typeId);
-    delTypeBtn.textContent = t ? `Xóa cả loại ${t.title}` : 'Xóa cả loại';
-  }
   if (typeSel && typeSel.dataset.filled !== '1') {
     typeSel.innerHTML = equipmentTypes()
       .map((t) => `<option value="${t.id}">${escapeHtml(t.title)}</option>`)
@@ -2330,18 +2321,6 @@ function deleteEquipmentDeviceFromDraft() {
   equipmentDraft.dirty = true;
   renderEquipmentEditor(equipmentDraft.maCsht, true);
   toast('Đã xóa khỏi bản nháp — nhớ Lưu thiết bị');
-}
-
-function deleteEquipmentTypeFromDraft() {
-  if (!equipmentDraft) return;
-  const typeDef = equipmentTypeById(equipmentDraft.typeId);
-  const title = typeDef?.title || 'loại này';
-  if (!confirm(`Xóa toàn bộ ${title} của CSHT này?`)) return;
-  equipmentDraft.byType[equipmentDraft.typeId] = [{}];
-  equipmentDraft.index = 0;
-  equipmentDraft.dirty = true;
-  renderEquipmentEditor(equipmentDraft.maCsht, true);
-  toast('Đã xóa loại khỏi bản nháp — nhớ Lưu thiết bị');
 }
 
 async function deleteEquipmentDeviceDirect(maCsht, typeId, index) {
@@ -2648,7 +2627,6 @@ function bindEvents() {
   $('#eq-device-index')?.addEventListener('change', onEquipmentIndexChange);
   $('#eq-add-device')?.addEventListener('click', addEquipmentDevice);
   $('#eq-delete-device')?.addEventListener('click', deleteEquipmentDeviceFromDraft);
-  $('#eq-delete-type')?.addEventListener('click', deleteEquipmentTypeFromDraft);
   $('#eq-fields')?.addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-eq-qr]');
     if (!btn) return;
