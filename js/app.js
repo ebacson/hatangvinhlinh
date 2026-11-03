@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=75';
+} from './config.js?v=76';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=75';
+} from './forecast.js?v=76';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=75';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=75';
+} from './stats.js?v=76';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=76';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -59,8 +59,8 @@ import {
   mapStationMayNoToMayPhatDien,
   mergeEquipmentDeviceFillEmpty,
   countEquipmentDataFields,
-} from './equipment.js?v=75';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=75';
+} from './equipment.js?v=76';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=76';
 
 
 const app = initializeApp(firebaseConfig);
@@ -1935,29 +1935,39 @@ function applyMayNoMapToMayPhatList(list, profile) {
   return { list: next, changed: true };
 }
 
-/** Ghi máy phát điện từ profile Máy nổ (chỉ điền ô trống). */
+/** Ghi máy phát điện từ profile Máy nổ — chỉ điền ô trống trên MPD #1, không đụng loại TB khác. */
 async function syncMayNoProfileToEquipment(csht, profile, source = 'station-mayno') {
   const key = String(csht || '').trim();
   const mapped = mapStationMayNoToMayPhatDien(profile);
   if (!key || !countEquipmentDataFields(mapped) || !state.user) return false;
-  const site = equipmentSiteByCsht(key) || {};
-  const existing = [...(equipmentDevicesByCsht(key).may_phat_dien || [])];
-  const { list, changed } = applyMayNoMapToMayPhatList(existing, profile);
+  const current0 = (equipmentDevicesByCsht(key).may_phat_dien || [])[0] || {};
+  const { changed } = mergeEquipmentDeviceFillEmpty(current0, mapped);
   if (!changed) return false;
+
   const who = currentUserLabel();
-  const devices = list.filter((d) => countEquipmentDataFields(d) > 0);
-  if (!devices.length) return false;
-  const payload = equipmentPayload(devices, who, state.user.uid, source);
-  await update(ref(db, `equipment/${key}`), {
-    ...equipmentSiteMetaPatch(key, site, who),
-    may_phat_dien: {
-      devices: payload.devices,
-      lastEditedBy: who,
-      lastEditedByUid: state.user.uid,
-      lastEditedAt: serverTimestamp(),
-      source,
-    },
-  });
+  const nowMs = Date.now();
+  // Multi-path update: chỉ các field trống của may_phat_dien/devices/0 (+ meta MPD).
+  const updates = {
+    maCsht: key,
+    lastEditedBy: who,
+    lastEditedByUid: state.user.uid,
+    lastEditedAt: serverTimestamp(),
+    'may_phat_dien/lastEditedBy': who,
+    'may_phat_dien/lastEditedByUid': state.user.uid,
+    'may_phat_dien/lastEditedAt': serverTimestamp(),
+    'may_phat_dien/source': source,
+  };
+  let wrote = 0;
+  for (const [k, v] of Object.entries(mapped)) {
+    if (v == null || String(v).trim() === '') continue;
+    if (current0[k] != null && String(current0[k]).trim() !== '') continue;
+    updates[`may_phat_dien/devices/0/${k}`] = String(v).trim();
+    wrote += 1;
+  }
+  if (!wrote) return false;
+  updates['may_phat_dien/devices/0/lastEditedBy'] = who;
+  updates['may_phat_dien/devices/0/lastEditedAt'] = nowMs;
+  await update(ref(db, `equipment/${key}`), updates);
   return true;
 }
 
