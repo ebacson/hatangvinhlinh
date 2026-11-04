@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=83';
+} from './config.js?v=84';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=83';
+} from './forecast.js?v=84';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=83';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=83';
+} from './stats.js?v=84';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=84';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -63,8 +63,8 @@ import {
   buildEquipmentKindRecord,
   equipmentKindKey,
   isUniqueEquipmentField,
-} from './equipment.js?v=83';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=83';
+} from './equipment.js?v=84';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=84';
 
 
 const app = initializeApp(firebaseConfig);
@@ -2701,18 +2701,31 @@ async function saveEquipment() {
       return clean;
     })
     .filter(Boolean);
-  const payload = equipmentPayload(devices, who, state.user.uid, 'manual');
   const csht = (equipmentDraft.maCsht || '').trim();
   if (!csht) {
     toast('Thiếu mã CSHT — không lưu được thiết bị');
     return;
   }
+  // Lưu form trống sẽ làm Firebase bỏ `devices: {}` → mất MPD trên list.
+  if (!devices.length) {
+    const existingN = (equipmentDevicesByCsht(csht)[typeId] || []).length;
+    if (existingN) {
+      if (
+        !confirm(
+          `Đang lưu ${typeDef.title} trống — sẽ xóa ${existingN} thiết bị đã có trên CSHT này. Tiếp tục?`
+        )
+      ) {
+        return;
+      }
+    }
+  }
+  const payload = equipmentPayload(devices, who, state.user.uid, 'manual');
   try {
     const site = equipmentSiteByCsht(csht) || {};
     await update(ref(db, `equipment/${csht}`), {
       ...equipmentSiteMetaPatch(csht, site, who),
       [typeId]: {
-        devices: payload.devices,
+        devices: Object.keys(payload.devices).length ? payload.devices : null,
         lastEditedBy: who,
         lastEditedByUid: state.user.uid,
         lastEditedAt: serverTimestamp(),
