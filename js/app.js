@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=92';
+} from './config.js?v=93';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=92';
+} from './forecast.js?v=93';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=92';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=92';
+} from './stats.js?v=93';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=93';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -63,8 +63,8 @@ import {
   buildEquipmentKindRecord,
   equipmentKindKey,
   isUniqueEquipmentField,
-} from './equipment.js?v=92';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=92';
+} from './equipment.js?v=93';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=93';
 
 
 const app = initializeApp(firebaseConfig);
@@ -2598,9 +2598,17 @@ function applyKindTemplateToCurrentDevice(kindKey) {
   while (list.length <= idx) list.push({});
   const current = { ...(list[idx] || {}) };
 
-  // Bỏ chọn mẫu: không xóa dữ liệu đang có — chỉ thôi áp dụng mẫu.
+  // Loại khác: xóa hết field để nhập tay từ đầu (sau khi xem mẫu không khớp).
   if (!kindKey) {
+    const blank = {};
+    list[idx] = blank;
+    equipmentDraft.byType[typeId] = list;
+    equipmentDraft.mode = equipmentDraft.mode || 'add';
+    const fields = $('#eq-fields');
+    if (fields) fields.dataset.stamp = '';
+    renderEquipmentEditor(equipmentDraft.maCsht, true);
     fillKindSelect(typeId, '');
+    toast('Đã chọn Loại khác — form trống, nhập thông số mới');
     return;
   }
 
