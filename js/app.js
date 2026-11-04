@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=84';
+} from './config.js?v=85';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=84';
+} from './forecast.js?v=85';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=84';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=84';
+} from './stats.js?v=85';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=85';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -63,8 +63,8 @@ import {
   buildEquipmentKindRecord,
   equipmentKindKey,
   isUniqueEquipmentField,
-} from './equipment.js?v=84';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=84';
+} from './equipment.js?v=85';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=85';
 
 
 const app = initializeApp(firebaseConfig);
@@ -1498,10 +1498,12 @@ function renderDetail() {
     if (equipmentPanel) equipmentPanel.hidden = false;
     if (stationPanel) stationPanel.hidden = true;
     historyPanel.hidden = true;
-    sheet.setAttribute('aria-label', 'Cập nhật thiết bị');
+    ensureEquipmentDraft(csht, sheet);
+    const isAdd = equipmentDraft?.mode === 'add';
+    sheet.setAttribute('aria-label', isAdd ? 'Thêm thiết bị' : 'Sửa thiết bị');
     const badge = $('#detail-mode-badge');
     if (badge) {
-      badge.textContent = 'Thiết bị';
+      badge.textContent = isAdd ? 'Thêm TB' : 'Sửa TB';
       badge.classList.toggle('is-history', false);
       badge.classList.toggle('is-lock', false);
       badge.classList.toggle('is-equipment', true);
@@ -1509,9 +1511,16 @@ function renderDetail() {
     }
     const site = state.equipmentByCsht[csht] || { maCsht: csht };
     $('#detail-title').textContent = formatMaTram(site.maTram) || csht;
-    $('#detail-subtitle').textContent = [site.tenTram, csht].filter(Boolean).join(' · ') || '—';
-    ensureEquipmentDraft(csht, sheet);
-    renderEquipmentEditor(csht);
+    const unit =
+      equipmentDraft && equipmentTypeById(equipmentDraft.typeId)
+        ? equipmentUnitOptionLabel(equipmentDraft.typeId, equipmentDraft.index)
+        : '';
+    $('#detail-subtitle').textContent =
+      [isAdd ? 'Thêm thiết bị' : 'Sửa thiết bị', unit, site.tenTram, csht].filter(Boolean).join(' · ') ||
+      '—';
+    const saveBtn = $('#detail-save-equipment');
+    if (saveBtn) saveBtn.textContent = isAdd ? 'Lưu thiết bị mới' : 'Lưu thay đổi';
+    renderEquipmentEditor(csht, true);
     return;
   }
   const s = state.stations.find((x) => x.stationKey === state.selectedKey);
@@ -2324,12 +2333,21 @@ function openEquipmentSheet(maCsht, typeId = null, index = 0, opts = {}) {
 
 function ensureEquipmentDraft(csht, sheet) {
   const key = String(csht || '').trim();
+  const focus = state.equipmentFocus || {};
+  const wantsRetarget =
+    !!equipmentDraft &&
+    equipmentDraft.maCsht === key &&
+    sheet.dataset.bound === '1' &&
+    sheet.dataset.key === key &&
+    sheet.dataset.mode === 'equipment' &&
+    (focus.typeId || focus.addNew);
   const needsInit =
     !equipmentDraft ||
     equipmentDraft.maCsht !== key ||
     !sheet.dataset.bound ||
     sheet.dataset.key !== key ||
-    sheet.dataset.mode !== 'equipment';
+    sheet.dataset.mode !== 'equipment' ||
+    wantsRetarget;
   if (!needsInit) return;
   const byType = {};
   const existingMap = equipmentDevicesByCsht(key);
@@ -2342,7 +2360,6 @@ function ensureEquipmentDraft(csht, sheet) {
     const applied = applyMayNoMapToMayPhatList(byType.may_phat_dien || [], mayNoProfile);
     byType.may_phat_dien = applied.list;
   }
-  const focus = state.equipmentFocus || {};
   const prefer =
     (focus.typeId && equipmentTypeById(focus.typeId) ? focus.typeId : null) ||
     equipmentTypes().find((t) => (byType[t.id] || []).length)?.id ||
@@ -2351,6 +2368,7 @@ function ensureEquipmentDraft(csht, sheet) {
   let idx = Number(focus.index);
   if (!Number.isFinite(idx) || idx < 0) idx = 0;
   let preferList = byType[prefer] || [];
+  const mode = focus.addNew ? 'add' : 'edit';
   if (focus.addNew) {
     const last = preferList[preferList.length - 1];
     if (preferList.length && last && !countEquipmentDataFields(last)) {
@@ -2360,14 +2378,21 @@ function ensureEquipmentDraft(csht, sheet) {
       byType[prefer] = preferList;
       idx = preferList.length - 1;
     }
-  } else if (idx >= preferList.length) {
-    idx = Math.max(0, preferList.length - 1);
+  } else {
+    if (!preferList.length) {
+      preferList = [{}];
+      byType[prefer] = preferList;
+      idx = 0;
+    } else if (idx >= preferList.length) {
+      idx = preferList.length - 1;
+    }
   }
   equipmentDraft = {
     maCsht: key,
     typeId: prefer,
     index: idx,
     byType,
+    mode,
     dirty: false,
   };
   state.equipmentFocus = null;
@@ -2376,6 +2401,8 @@ function ensureEquipmentDraft(csht, sheet) {
   sheet.dataset.bound = '1';
   const fields = $('#eq-fields');
   if (fields) fields.dataset.stamp = '';
+  const kindSel = $('#eq-kind-from');
+  if (kindSel) kindSel.value = '';
 }
 
 function captureEquipmentFormIntoDraft() {
@@ -2455,8 +2482,8 @@ function renderEquipmentEditor(csht, forceFields = false) {
     fields.innerHTML = buildEquipmentFieldsHtml(typeDef, list[equipmentDraft.index] || {});
     fields.dataset.stamp = stamp;
   }
-  // Đổ list mẫu sau khi gắn stamp form — silent, không áp dụng/xóa dữ liệu.
-  fillKindSelect(equipmentDraft.typeId, $('#eq-kind-from')?.value || '');
+  // Đổ list mẫu theo đúng thiết bị đang mở (không giữ value loại TB trước đó).
+  fillKindSelect(equipmentDraft.typeId, '');
 }
 
 function onEquipmentTypeChange() {
@@ -2525,10 +2552,15 @@ function fillKindSelect(typeId, preferredKey = '') {
   if (!sel) return;
   const kinds = kindsForType(typeId);
   let want = preferredKey || '';
-  if (!want && equipmentDraft) {
+  if (equipmentDraft) {
     const cur = (equipmentDraft.byType?.[typeId] || [])[equipmentDraft.index];
     const match = cur ? equipmentKindKey(typeId, cur) : null;
-    if (match && kinds.some((k) => k.kindKey === match)) want = match;
+    if (match && kinds.some((k) => k.kindKey === match)) {
+      // Ưu tiên khớp thiết bị đang sửa; chỉ giữ preferred khi trùng.
+      if (!want || want === match) want = match;
+    } else if (want && !kinds.some((k) => k.kindKey === want)) {
+      want = '';
+    }
   }
   eqKindSelectSilent = true;
   try {
@@ -2544,8 +2576,11 @@ function fillKindSelect(typeId, preferredKey = '') {
     sel.disabled = false;
     const hint = sel.parentElement?.querySelector('.muted.tiny');
     if (hint) {
+      const editing = equipmentDraft?.mode === 'edit';
       hint.textContent = kinds.length
-        ? `${kinds.length} loại có sẵn · chọn để điền thông số cố định. Serial / IP / thẻ tài sản… nhập mới.`
+        ? editing
+          ? `${kinds.length} loại có sẵn · chọn mẫu sẽ ghi đè thông số cố định (serial/IP giữ nguyên).`
+          : `${kinds.length} loại có sẵn · chọn để điền thông số cố định. Serial / IP / thẻ tài sản… nhập mới.`
         : 'Chưa có mẫu cho loại này — nhập tay, lần lưu sau sẽ thêm vào danh mục.';
     }
   } finally {
@@ -2596,9 +2631,14 @@ function addEquipmentDevice() {
   list.push({});
   equipmentDraft.byType[typeId] = list;
   equipmentDraft.index = list.length - 1;
+  equipmentDraft.mode = 'add';
   // Đánh dấu form DOM lệch index để capture không ghi đè nhầm trước khi render.
   const fields = $('#eq-fields');
   if (fields) fields.dataset.stamp = '';
+  const saveBtn = $('#detail-save-equipment');
+  if (saveBtn) saveBtn.textContent = 'Lưu thiết bị mới';
+  const badge = $('#detail-mode-badge');
+  if (badge) badge.textContent = 'Thêm TB';
   renderEquipmentEditor(equipmentDraft.maCsht, true);
   fillKindSelect(typeId, '');
 }
@@ -2734,10 +2774,17 @@ async function saveEquipment() {
     });
     // Cập nhật danh mục loại TB toàn hệ thống (hãng+model → thông số cố định)
     upsertEquipmentKindsFromDevices(typeId, devices, who).catch(() => {});
+    const mode = equipmentDraft.mode;
     const sheet = $('#detail-sheet');
     if (sheet) sheet.dataset.bound = '';
     equipmentDraft = null;
-    toast(devices.length ? `Đã lưu ${devices.length} ${typeDef.title}` : `Đã xóa dữ liệu ${typeDef.title}`);
+    toast(
+      devices.length
+        ? mode === 'edit'
+          ? `Đã cập nhật ${typeDef.title}`
+          : `Đã lưu ${devices.length} ${typeDef.title}`
+        : `Đã xóa dữ liệu ${typeDef.title}`
+    );
     state.selectedCsht = null;
     state.sheetMode = null;
     render();
@@ -2999,6 +3046,19 @@ function closeDetail() {
   state.selectedKey = null;
   state.selectedCsht = null;
   state.sheetMode = null;
+  state.equipmentFocus = null;
+  equipmentDraft = null;
+  const sheet = $('#detail-sheet');
+  if (sheet) {
+    sheet.dataset.bound = '';
+    sheet.dataset.key = '';
+    sheet.dataset.mode = '';
+  }
+  const fields = $('#eq-fields');
+  if (fields) {
+    fields.innerHTML = '';
+    fields.dataset.stamp = '';
+  }
   stopRunHistoryListener();
   render();
 }

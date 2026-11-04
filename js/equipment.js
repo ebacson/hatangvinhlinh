@@ -1,5 +1,5 @@
 /** Quản lý thiết bị trạm — root RTDB `equipment/{CSHT_…}` (chủng loại + thông số KT). */
-import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=84';
+import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=85';
 
 const BASE = '/hatangvinhlinh';
 
@@ -69,7 +69,7 @@ const TYPE_IDS = new Set(equipmentTypes().map((t) => t.id));
 export async function loadEquipmentCatalog() {
   if (catalogCache) return catalogCache;
   if (!catalogPromise) {
-    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=84`)
+    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=85`)
       .then((r) => {
         if (!r.ok) throw new Error('Không tải được file thiết bị');
         return r.json();
@@ -101,22 +101,31 @@ export function normalizeEquipment(raw) {
   for (const [typeId, node] of Object.entries(raw)) {
     if (!TYPE_IDS.has(typeId)) continue;
     if (!node || typeof node !== 'object') continue;
-    const devicesNode = node.devices && typeof node.devices === 'object' ? node.devices : node;
-    const keys = Object.keys(devicesNode)
-      .filter(
-        (k) =>
-          k !== 'lastEditedBy' &&
-          k !== 'lastEditedByUid' &&
-          k !== 'lastEditedAt' &&
-          k !== 'updatedAt' &&
-          k !== 'source' &&
-          k !== 'devices'
-      )
-      .sort((a, b) => Number(a) - Number(b) || String(a).localeCompare(String(b)));
-    const items = [];
-    for (const k of keys) {
-      const item = devicesNode[k];
-      if (item && typeof item === 'object' && !Array.isArray(item)) items.push({ ...item });
+    let items = [];
+    // RTDB thường lưu devices dạng mảng [{…}, …] sau khi ghi key "0","1",…
+    if (Array.isArray(node.devices)) {
+      items = node.devices
+        .filter((item) => item && typeof item === 'object' && !Array.isArray(item))
+        .map((item) => ({ ...item }));
+    } else {
+      const devicesNode =
+        node.devices && typeof node.devices === 'object' ? node.devices : node;
+      const keys = Object.keys(devicesNode)
+        .filter(
+          (k) =>
+            k !== 'lastEditedBy' &&
+            k !== 'lastEditedByUid' &&
+            k !== 'lastEditedAt' &&
+            k !== 'updatedAt' &&
+            k !== 'source' &&
+            k !== 'devices' &&
+            k !== 'mappedFromStation'
+        )
+        .sort((a, b) => Number(a) - Number(b) || String(a).localeCompare(String(b)));
+      for (const k of keys) {
+        const item = devicesNode[k];
+        if (item && typeof item === 'object' && !Array.isArray(item)) items.push({ ...item });
+      }
     }
     if (items.length) out[typeId] = items;
   }
