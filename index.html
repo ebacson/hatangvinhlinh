@@ -18,7 +18,7 @@
       href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700&family=Sora:wght@600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="css/app.css?v=101" />
+    <link rel="stylesheet" href="css/app.css?v=102" />
   </head>
   <body>
     <div id="boot-screen" class="boot-screen" role="status" aria-live="polite">
@@ -187,12 +187,7 @@
                 autocomplete="off"
               />
             </label>
-            <div class="equipment-toolbar-row stations-geo-row">
-              <button type="button" id="stations-geo-btn" class="btn btn-outline stats-export-btn">
-                Gần tôi
-              </button>
-              <div id="stations-summary" class="stations-summary" hidden></div>
-            </div>
+            <div id="stations-summary" class="stations-summary" hidden></div>
           </div>
           <div id="stations-empty" class="empty empty-stations" hidden>
             <p class="empty-title">Đang tải...</p>
@@ -222,6 +217,9 @@
               />
             </label>
             <div class="equipment-toolbar-row">
+              <button type="button" id="equipment-geo-btn" class="btn btn-outline stats-export-btn">
+                Gần tôi
+              </button>
               <button type="button" id="equipment-export-excel" class="btn btn-outline stats-export-btn">
                 Xuất báo cáo
               </button>
@@ -547,6 +545,6 @@
       <button type="button" id="update-reload" class="btn update-banner-btn">Cập nhật ngay</button>
     </div>
 
-    <script type="module" src="js/app.js?v=101"></script>
+    <script type="module" src="js/app.js?v=102"></script>
   </body>
 </html>
