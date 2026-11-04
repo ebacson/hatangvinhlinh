@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=95';
+} from './config.js?v=96';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=95';
+} from './forecast.js?v=96';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=95';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=95';
+} from './stats.js?v=96';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=96';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -62,9 +62,10 @@ import {
   sharedFieldsFromDevice,
   buildEquipmentKindRecord,
   equipmentKindKey,
+  equipmentKindLabel,
   isUniqueEquipmentField,
-} from './equipment.js?v=95';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=95';
+} from './equipment.js?v=96';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=96';
 
 
 const app = initializeApp(firebaseConfig);
@@ -2530,7 +2531,10 @@ function kindsForType(typeId) {
     if (!map[built.kindKey]) map[built.kindKey] = { ...built.record, kindKey: built.kindKey };
   }
   return Object.values(map).sort((a, b) =>
-    String(a.label || '').localeCompare(String(b.label || ''), 'vi')
+    String(equipmentKindLabel(typeId, a) || a.label || '').localeCompare(
+      String(equipmentKindLabel(typeId, b) || b.label || ''),
+      'vi'
+    )
   );
 }
 
@@ -2573,13 +2577,20 @@ function fillKindSelect(typeId, preferredKey = '') {
     sel.innerHTML =
       `<option value="">Loại khác</option>` +
       kinds
-        .map(
-          (k) =>
-            `<option value="${escapeAttr(k.kindKey)}">${escapeHtml(k.label || k.kindKey)}</option>`
-        )
+        .map((k) => {
+          const text = equipmentKindLabel(typeId, k) || k.label || k.kindKey;
+          return `<option value="${escapeAttr(k.kindKey)}">${escapeHtml(text)}</option>`;
+        })
         .join('');
     sel.value = want && [...sel.options].some((o) => o.value === want) ? want : '';
     sel.disabled = false;
+    const kindLab = sel.parentElement?.querySelector('label[for="eq-kind-from"]');
+    if (kindLab) {
+      kindLab.textContent =
+        typeId === 'may_phat_dien'
+          ? 'Theo loại có sẵn (tên · model · công suất)'
+          : 'Theo loại có sẵn (hãng · model)';
+    }
     const hint = sel.parentElement?.querySelector('.muted.tiny');
     if (hint) {
       const editing = equipmentDraft?.mode === 'edit';

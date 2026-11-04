@@ -1,5 +1,5 @@
 /** Quản lý thiết bị trạm — root RTDB `equipment/{CSHT_…}` (chủng loại + thông số KT). */
-import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=95';
+import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=96';
 
 const BASE = '/hatangvinhlinh';
 
@@ -81,7 +81,7 @@ const TYPE_IDS = new Set(equipmentTypes().map((t) => t.id));
 export async function loadEquipmentCatalog() {
   if (catalogCache) return catalogCache;
   if (!catalogPromise) {
-    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=95`)
+    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=96`)
       .then((r) => {
         if (!r.ok) throw new Error('Không tải được file thiết bị');
         return r.json();
@@ -652,6 +652,26 @@ export function equipmentKindKey(typeId, device) {
 }
 
 export function equipmentKindLabel(typeId, deviceOrShared) {
+  if (typeId === 'may_phat_dien') {
+    const d = deviceOrShared || {};
+    const { brand, model, kva } = canonicalMayPhatDien(d);
+    let powerLabel = '';
+    if (kva != null) {
+      powerLabel = `${String(kva).replace(/\.0$/, '')} kVA`;
+    } else {
+      const raw = String(d.cong_suat_danh_dinh_kva || d.cong_suat_kva || '').trim();
+      if (raw) powerLabel = /k\.?\s*v\.?\s*a/i.test(raw) ? raw : `${raw} kVA`;
+    }
+    // Model dạng "10KVA" trùng công suất → chỉ hiện 1 lần ở chỗ công suất.
+    const modelIsPower =
+      !!model && kva != null && parseEquipmentKva(model) === kva && /^\d/i.test(model);
+    const parts = [];
+    if (brand) parts.push(brand);
+    if (model && !modelIsPower) parts.push(model);
+    if (powerLabel) parts.push(powerLabel);
+    else if (model && modelIsPower) parts.push(model);
+    return parts.join(' · ') || 'Máy phát điện';
+  }
   const { brand, model } = canonicalBrandModel(typeId, deviceOrShared);
   if (brand && model) return `${brand} · ${model}`;
   if (brand) return brand;
