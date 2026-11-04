@@ -18,7 +18,7 @@
       href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700&family=Sora:wght@600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="css/app.css?v=102" />
+    <link rel="stylesheet" href="css/app.css?v=103" />
   </head>
   <body>
     <div id="boot-screen" class="boot-screen" role="status" aria-live="polite">
@@ -217,9 +217,13 @@
               />
             </label>
             <div class="equipment-toolbar-row">
-              <button type="button" id="equipment-geo-btn" class="btn btn-outline stats-export-btn">
-                Gần tôi
-              </button>
+              <label class="stats-field equipment-filter-field">
+                <span>Lọc</span>
+                <select id="equipment-geo-filter">
+                  <option value="all" selected>Tất cả</option>
+                  <option value="nearest">Gần nhất</option>
+                </select>
+              </label>
               <button type="button" id="equipment-export-excel" class="btn btn-outline stats-export-btn">
                 Xuất báo cáo
               </button>
@@ -545,6 +549,6 @@
       <button type="button" id="update-reload" class="btn update-banner-btn">Cập nhật ngay</button>
     </div>
 
-    <script type="module" src="js/app.js?v=102"></script>
+    <script type="module" src="js/app.js?v=103"></script>
   </body>
 </html>

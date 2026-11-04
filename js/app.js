@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=102';
+} from './config.js?v=103';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=102';
+} from './forecast.js?v=103';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=102';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=102';
+} from './stats.js?v=103';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=103';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -66,8 +66,8 @@ import {
   applyBinhAcquyInferredFields,
   applyPostefAcquyYearFromSerial,
   isUniqueEquipmentField,
-} from './equipment.js?v=102';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=102';
+} from './equipment.js?v=103';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=103';
 
 
 const app = initializeApp(firebaseConfig);
@@ -102,6 +102,8 @@ const state = {
   stations: [],
   query: '',
   equipmentQuery: '',
+  /** 'all' | 'nearest' */
+  equipmentGeoFilter: 'all',
   /** Vị trí GPS hiện tại: { lat, lng, accuracy, at } | null */
   geo: null,
   geoLocating: false,
@@ -920,8 +922,12 @@ function siteDistanceMeters(rowOrSite) {
   return haversineMeters(geo.lat, geo.lng, c.lat, c.lng);
 }
 
+function isEquipmentNearestFilter() {
+  return state.equipmentGeoFilter === 'nearest' && !!state.geo;
+}
+
 function sortEquipmentSitesByDistance(list) {
-  if (!state.geo) return list;
+  if (!isEquipmentNearestFilter()) return list;
   return [...list].sort((a, b) => {
     const da = siteDistanceMeters(a);
     const db = siteDistanceMeters(b);
@@ -934,36 +940,25 @@ function sortEquipmentSitesByDistance(list) {
   });
 }
 
-function updateEquipmentGeoButton() {
-  const btn = $('#equipment-geo-btn');
-  if (!btn) return;
-  btn.disabled = !!state.geoLocating;
-  if (state.geoLocating) {
-    btn.textContent = 'Đang lấy GPS…';
-    btn.classList.add('is-active');
-    return;
-  }
-  if (state.geo) {
-    const acc =
-      state.geo.accuracy != null && Number.isFinite(state.geo.accuracy)
-        ? ` ±${Math.round(state.geo.accuracy)} m`
-        : '';
-    btn.textContent = `Làm mới vị trí${acc}`;
-    btn.classList.add('is-active');
-    return;
-  }
-  btn.textContent = 'Gần tôi';
-  btn.classList.remove('is-active');
+function syncEquipmentGeoFilterControl() {
+  const sel = $('#equipment-geo-filter');
+  if (!sel) return;
+  sel.disabled = !!state.geoLocating;
+  if (sel.value !== state.equipmentGeoFilter) sel.value = state.equipmentGeoFilter;
 }
 
-function requestEquipmentGeo() {
+function requestEquipmentGeoForNearest() {
   if (!navigator.geolocation) {
     toast('Thiết bị không hỗ trợ GPS');
+    state.equipmentGeoFilter = 'all';
+    syncEquipmentGeoFilterControl();
+    renderEquipmentList();
     return;
   }
   if (state.geoLocating) return;
   state.geoLocating = true;
-  updateEquipmentGeoButton();
+  syncEquipmentGeoFilterControl();
+  renderEquipmentList();
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       state.geoLocating = false;
@@ -973,13 +968,16 @@ function requestEquipmentGeo() {
         accuracy: pos.coords.accuracy,
         at: Date.now(),
       };
-      updateEquipmentGeoButton();
+      state.equipmentGeoFilter = 'nearest';
+      syncEquipmentGeoFilterControl();
       renderEquipmentList();
-      toast('Đã lấy vị trí — sắp xếp CSHT gần bạn để cập nhật đúng trạm');
+      toast('Đã lấy vị trí — danh sách theo khoảng cách gần nhất');
     },
     (err) => {
       state.geoLocating = false;
-      updateEquipmentGeoButton();
+      state.equipmentGeoFilter = 'all';
+      syncEquipmentGeoFilterControl();
+      renderEquipmentList();
       const code = err && err.code;
       const msg =
         code === 1
@@ -993,6 +991,20 @@ function requestEquipmentGeo() {
     },
     { enableHighAccuracy: true, timeout: 20000, maximumAge: 30000 }
   );
+}
+
+function onEquipmentGeoFilterChange(value) {
+  const next = value === 'nearest' ? 'nearest' : 'all';
+  if (next === 'all') {
+    state.equipmentGeoFilter = 'all';
+    state.geoLocating = false;
+    syncEquipmentGeoFilterControl();
+    renderEquipmentList();
+    return;
+  }
+  // Gần nhất: lấy GPS (làm mới mỗi lần chọn) rồi sắp xếp.
+  state.equipmentGeoFilter = 'nearest';
+  requestEquipmentGeoForNearest();
 }
 
 function renderStationsSummary(list) {
@@ -1638,11 +1650,12 @@ function renderDetail() {
       equipmentDraft && equipmentTypeById(equipmentDraft.typeId)
         ? equipmentUnitOptionLabel(equipmentDraft.typeId, equipmentDraft.index)
         : '';
-    const distM = state.geo ? siteDistanceMeters(site) : null;
+    const showGeo = isEquipmentNearestFilter();
+    const distM = showGeo ? siteDistanceMeters(site) : null;
     const distPart =
       distM != null
         ? `${formatDistanceMeters(distM)}${distM <= GEO_NEAR_M ? ' · gần vị trí' : ' · lệch vị trí'}`
-        : state.geo
+        : showGeo
           ? 'Chưa có tọa độ'
           : '';
     $('#detail-subtitle').textContent =
@@ -2342,16 +2355,18 @@ function renderEquipmentList() {
   if (!root || !empty) return;
   const syncBtn = $('#equipment-sync-mayno');
   if (syncBtn) syncBtn.hidden = !isRootUser();
-  updateEquipmentGeoButton();
+  syncEquipmentGeoFilterControl();
   const list = filteredEquipmentSites();
   if (summary) {
     summary.hidden = false;
-    if (state.geo) {
+    if (state.geoLocating && state.equipmentGeoFilter === 'nearest') {
+      summary.textContent = 'Đang lấy GPS…';
+    } else if (isEquipmentNearestFilter()) {
       const near = list.filter((r) => {
         const d = siteDistanceMeters(r);
         return d != null && d <= GEO_NEAR_M;
       }).length;
-      summary.textContent = `${list.length} CSHT · ${near} ≤${GEO_NEAR_M} m`;
+      summary.textContent = `${list.length} CSHT · gần nhất · ${near} ≤${GEO_NEAR_M} m`;
     } else {
       summary.textContent = `${list.length} CSHT`;
     }
@@ -2371,9 +2386,10 @@ function renderEquipmentList() {
         r.lat != null && r.long != null
           ? `${escapeHtml(String(r.lat))}, ${escapeHtml(String(r.long))}`
           : '—';
-      const distM = state.geo ? siteDistanceMeters(r) : null;
+      const showGeo = isEquipmentNearestFilter();
+      const distM = showGeo ? siteDistanceMeters(r) : null;
       const distNear = distM != null && distM <= GEO_NEAR_M;
-      const distHtml = !state.geo
+      const distHtml = !showGeo
         ? ''
         : distM != null
           ? `<p class="station-dist${distNear ? ' is-near' : ''}">${
@@ -2570,11 +2586,12 @@ function renderEquipmentEditor(csht, forceFields = false) {
       site.lat != null && site.long != null ? ` · LAT ${site.lat}, LONG ${site.long}` : '';
     const ten = site.tenTram ? ` · ${site.tenTram}` : '';
     const ma = site.maTram ? ` · ${formatMaTram(site.maTram)}` : '';
-    const distM = state.geo ? siteDistanceMeters(site) : null;
+    const showGeo = isEquipmentNearestFilter();
+    const distM = showGeo ? siteDistanceMeters(site) : null;
     const dist =
       distM != null
         ? ` · ${formatDistanceMeters(distM)}${distM <= GEO_NEAR_M ? ' (gần vị trí)' : ' (lệch vị trí — kiểm tra lại CSHT)'}`
-        : state.geo
+        : showGeo
           ? ' · Chưa có tọa độ'
           : '';
     hint.textContent = `CSHT: ${key}${ma}${ten}${geo}${dist}. Chỉ cập nhật chủng loại và thông số kỹ thuật.`;
@@ -3000,8 +3017,8 @@ function bindEvents() {
     state.equipmentQuery = e.target.value;
     renderEquipmentList();
   });
-  $('#equipment-geo-btn')?.addEventListener('click', () => {
-    requestEquipmentGeo();
+  $('#equipment-geo-filter')?.addEventListener('change', (e) => {
+    onEquipmentGeoFilterChange(e.target.value || 'all');
   });
   $('#equipment-export-excel')?.addEventListener('click', () => {
     exportEquipmentExcel();

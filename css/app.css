@@ -1005,11 +1005,6 @@ main {
   box-shadow: 0 0 0 3px rgba(26, 111, 181, 0.16);
 }
 
-#equipment-geo-btn.is-active {
-  border-color: var(--primary);
-  color: var(--primary);
-}
-
 .stations-summary {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
