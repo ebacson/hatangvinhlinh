@@ -1,5 +1,5 @@
 /** Quản lý thiết bị trạm — root RTDB `equipment/{CSHT_…}` (chủng loại + thông số KT). */
-import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=98';
+import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=99';
 
 const BASE = '/hatangvinhlinh';
 
@@ -81,7 +81,7 @@ const TYPE_IDS = new Set(equipmentTypes().map((t) => t.id));
 export async function loadEquipmentCatalog() {
   if (catalogCache) return catalogCache;
   if (!catalogPromise) {
-    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=98`)
+    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=99`)
       .then((r) => {
         if (!r.ok) throw new Error('Không tải được file thiết bị');
         return r.json();
@@ -611,10 +611,11 @@ export function parsePostefAcquyYearFromSerial(serial) {
 }
 
 /**
- * Điền/ghi đè thông số ắc quy theo mẫu chuẩn:
- * - POSTEF V-LFP48100 → Lithium, 48V, 100Ah; năm SX từ serial VLF20xx…
+ * Điền/ghi đè thông số ắc quy theo mẫu chuẩn (không đụng năm SX):
+ * - POSTEF V-LFP48100 → Lithium, 48V, 100Ah
  * - POSMAX PNGB23000 → Pb, 2V, 300Ah
  * - SAITE → 2V, 300Ah
+ * Năm SX chỉ suy từ serial qua applyPostefAcquyYearFromSerial (sau khi quét/nhập).
  */
 export function applyBinhAcquyInferredFields(device, opts = {}) {
   const fillEmptyOnly = !!opts.fillEmptyOnly;
@@ -643,11 +644,16 @@ export function applyBinhAcquyInferredFields(device, opts = {}) {
     set('dung_luong_binh', '300');
   }
 
-  if (brand === 'POSTEF') {
-    const year = parsePostefAcquyYearFromSerial(d.serial);
-    if (year) set('nam_san_xuat', year, { force: true });
-  }
+  return d;
+}
 
+/** Chỉ gọi sau khi quét/nhập serial — POSTEF VLF20xx… → nam_san_xuat. */
+export function applyPostefAcquyYearFromSerial(device) {
+  const d = { ...(device || {}) };
+  const brand = normalizeEquipmentBrand(d.hang_san_xuat || d.nha_san_xuat || '');
+  if (brand !== 'POSTEF' && brand !== 'POSTEG') return d;
+  const year = parsePostefAcquyYearFromSerial(d.serial);
+  if (year) d.nam_san_xuat = year;
   return d;
 }
 

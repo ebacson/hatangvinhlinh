@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=98';
+} from './config.js?v=99';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=98';
+} from './forecast.js?v=99';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=98';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=98';
+} from './stats.js?v=99';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=99';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -64,9 +64,10 @@ import {
   equipmentKindKey,
   equipmentKindLabel,
   applyBinhAcquyInferredFields,
+  applyPostefAcquyYearFromSerial,
   isUniqueEquipmentField,
-} from './equipment.js?v=98';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=98';
+} from './equipment.js?v=99';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=99';
 
 
 const app = initializeApp(firebaseConfig);
@@ -3065,11 +3066,15 @@ function bindEvents() {
     const typeDef = equipmentTypeById('binh_acquy');
     const root = $('#eq-fields');
     if (!typeDef || !root) return;
-    const vals = applyBinhAcquyInferredFields(readEquipmentFormValues(typeDef, root));
+    let vals = applyBinhAcquyInferredFields(readEquipmentFormValues(typeDef, root));
+    // Năm SX chỉ suy ra khi vừa quét/nhập serial (không theo hãng/model).
+    const touchYear = key === 'serial';
+    if (touchYear) vals = applyPostefAcquyYearFromSerial(vals);
+    const keysToWrite = touchYear
+      ? ['cong_nghe_accu', 'dien_ap_binh', 'dung_luong_binh', 'hang_san_xuat', 'model', 'nam_san_xuat']
+      : ['cong_nghe_accu', 'dien_ap_binh', 'dung_luong_binh', 'hang_san_xuat', 'model'];
     for (const f of typeDef.fields) {
-      if (!['cong_nghe_accu', 'dien_ap_binh', 'dung_luong_binh', 'nam_san_xuat', 'hang_san_xuat', 'model'].includes(f.key)) {
-        continue;
-      }
+      if (!keysToWrite.includes(f.key)) continue;
       const el = root.querySelector(`[data-eq-key="${CSS.escape(f.key)}"]`);
       if (!el || vals[f.key] == null) continue;
       if (el.value !== String(vals[f.key])) el.value = String(vals[f.key]);
