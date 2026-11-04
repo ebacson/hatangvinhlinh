@@ -7,7 +7,7 @@
 const DB = 'https://ghunter-4b0a8-default-rtdb.firebaseio.com';
 
 const UNIQUE_FIELD_RE =
-  /^(serial|serial_.+|ma_thiet_bi_ip|snmp_ip|ip_thiet_bi|the_tai_san_.+|so_gio_da_chay|ngay_.+|han_dung|so_kg_sau_khi_can|dong_tai_hien_huu|dong_tai_dap_ung_hien_tai|dong_tai_tieu_thu_hien_tai_a|dong_tai_thuc_te_.+|dien_ap_thuc_te_.+|tin_hieu_canh_bao_hien_tai|tong_so_module_nan_hien_co|ma_dan_pin_mat_troi|ten_dan_pin_mat_troi)$/i;
+  /^(serial|serial_.+|ma_thiet_bi_ip|snmp_ip|ip_thiet_bi|the_tai_san_.+|so_gio_da_chay|dinh_muc_nhien_lieu|ngay_.+|han_dung|so_kg_sau_khi_can|dong_tai_hien_huu|dong_tai_dap_ung_hien_tai|dong_tai_tieu_thu_hien_tai_a|dong_tai_thuc_te_.+|dien_ap_thuc_te_.+|tin_hieu_canh_bao_hien_tai|tong_so_module_nan_hien_co|ma_dan_pin_mat_troi|ten_dan_pin_mat_troi)$/i;
 
 const SITE_META = new Set([
   'maCsht',
@@ -173,9 +173,10 @@ function canonBinhAcquy(d) {
   let modelKey = normModelKey(model, brand);
 
   if (brand === 'POSMAX') {
+    // Chuẩn đúng: PNGB23000
     if (modelKey === 'PNGB23000' || modelKey === 'PNGB2300') {
-      model = 'PNGB2300';
-      modelKey = 'PNGB2300';
+      model = 'PNGB23000';
+      modelKey = 'PNGB23000';
     }
   }
   if (brand === 'POSTEF' || brand === 'POSTEG') {
@@ -382,7 +383,7 @@ async function main() {
       let model = pickDisplayModel(g.mKey, g.rawModels);
       if (typeId === 'may_phat_dien' && g.mKey) model = g.mKey;
       if (typeId === 'binh_acquy' && g.mKey === 'VLFP48100') model = 'V-LFP48100';
-      if (typeId === 'binh_acquy' && g.mKey === 'PNGB2300') model = 'PNGB2300';
+      if (typeId === 'binh_acquy' && g.mKey === 'PNGB23000') model = 'PNGB23000';
       if (typeId === 'dieu_hoa' && g.mKey) model = g.mKey;
       const variants = new Set(
         g.locs.map((x) => `${x.brand || ''} · ${x.model || ''}`.trim())
@@ -410,7 +411,7 @@ async function main() {
           if (!shared.dien_ap_binh) shared.dien_ap_binh = '48';
           if (!shared.dung_luong_binh) shared.dung_luong_binh = '100';
         }
-        if (brand === 'POSMAX' && model === 'PNGB2300') {
+        if (brand === 'POSMAX' && model === 'PNGB23000') {
           if (!shared.cong_nghe_accu) shared.cong_nghe_accu = 'Pb';
           if (!shared.dien_ap_binh) shared.dien_ap_binh = '2';
           if (!shared.dung_luong_binh) shared.dung_luong_binh = '300';
@@ -465,8 +466,8 @@ async function main() {
             if (!loc.device.dien_ap_binh) patch.dien_ap_binh = '48';
             if (!loc.device.dung_luong_binh) patch.dung_luong_binh = '100';
           }
-          if (brand === 'POSMAX' && model === 'PNGB2300') {
-            if (curModel !== 'PNGB2300') patch.model = 'PNGB2300';
+          if (brand === 'POSMAX' && model === 'PNGB23000') {
+            if (curModel !== 'PNGB23000') patch.model = 'PNGB23000';
             if (!loc.device.cong_nghe_accu) patch.cong_nghe_accu = 'Pb';
             if (!loc.device.dien_ap_binh) patch.dien_ap_binh = '2';
             if (!loc.device.dung_luong_binh) patch.dung_luong_binh = '300';

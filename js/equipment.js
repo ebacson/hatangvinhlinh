@@ -1,5 +1,5 @@
 /** Quản lý thiết bị trạm — root RTDB `equipment/{CSHT_…}` (chủng loại + thông số KT). */
-import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=90';
+import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=91';
 
 const BASE = '/hatangvinhlinh';
 
@@ -81,7 +81,7 @@ const TYPE_IDS = new Set(equipmentTypes().map((t) => t.id));
 export async function loadEquipmentCatalog() {
   if (catalogCache) return catalogCache;
   if (!catalogPromise) {
-    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=90`)
+    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=91`)
       .then((r) => {
         if (!r.ok) throw new Error('Không tải được file thiết bị');
         return r.json();
@@ -301,7 +301,7 @@ export function countEquipmentDataFields(device) {
  * Còn lại = field cố định của loại (hãng/model/thông số chung).
  */
 const UNIQUE_FIELD_RE =
-  /^(serial|serial_.+|ma_thiet_bi_ip|snmp_ip|ip_thiet_bi|the_tai_san_.+|so_gio_da_chay|ngay_.+|han_dung|so_kg_sau_khi_can|dong_tai_hien_huu|dong_tai_dap_ung_hien_tai|dong_tai_tieu_thu_hien_tai_a|dong_tai_thuc_te_.+|dien_ap_thuc_te_.+|tin_hieu_canh_bao_hien_tai|tong_so_module_nan_hien_co|ma_dan_pin_mat_troi|ten_dan_pin_mat_troi)$/i;
+  /^(serial|serial_.+|ma_thiet_bi_ip|snmp_ip|ip_thiet_bi|the_tai_san_.+|so_gio_da_chay|dinh_muc_nhien_lieu|ngay_.+|han_dung|so_kg_sau_khi_can|dong_tai_hien_huu|dong_tai_dap_ung_hien_tai|dong_tai_tieu_thu_hien_tai_a|dong_tai_thuc_te_.+|dien_ap_thuc_te_.+|tin_hieu_canh_bao_hien_tai|tong_so_module_nan_hien_co|ma_dan_pin_mat_troi|ten_dan_pin_mat_troi)$/i;
 
 export function isUniqueEquipmentField(key) {
   return UNIQUE_FIELD_RE.test(String(key || ''));
@@ -547,7 +547,7 @@ export function canonicalDieuHoa(device) {
 }
 
 /**
- * Bình ắc quy: gom POSMAX PNGB23000→PNGB2300; POSTEF thiếu model → V-LFP48100.
+ * Bình ắc quy: gom POSMAX PNGB2300→PNGB23000; POSTEF thiếu model → V-LFP48100.
  */
 export function canonicalBinhAcquy(device) {
   const d = device || {};
@@ -558,10 +558,10 @@ export function canonicalBinhAcquy(device) {
   let modelKey = normalizeEquipmentModelKey(model, brand);
 
   if (brand === 'POSMAX') {
-    // PNGB23000 = lỗi thừa số 0 của PNGB2300 (cùng Pb 2V 300Ah)
+    // Chuẩn đúng: PNGB23000 (PNGB2300 là thiếu số 0)
     if (modelKey === 'PNGB23000' || modelKey === 'PNGB2300') {
-      model = 'PNGB2300';
-      modelKey = 'PNGB2300';
+      model = 'PNGB23000';
+      modelKey = 'PNGB23000';
     }
   }
 
@@ -691,7 +691,7 @@ export function buildEquipmentKindRecord(typeId, device, who) {
       if (!shared.dien_ap_binh) shared.dien_ap_binh = '48';
       if (!shared.dung_luong_binh) shared.dung_luong_binh = '100';
     }
-    if (brand === 'POSMAX' && model === 'PNGB2300') {
+    if (brand === 'POSMAX' && model === 'PNGB23000') {
       if (!shared.cong_nghe_accu) shared.cong_nghe_accu = 'Pb';
       if (!shared.dien_ap_binh) shared.dien_ap_binh = '2';
       if (!shared.dung_luong_binh) shared.dung_luong_binh = '300';
