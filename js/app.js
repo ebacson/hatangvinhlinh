@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=91';
+} from './config.js?v=92';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=91';
+} from './forecast.js?v=92';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=91';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=91';
+} from './stats.js?v=92';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=92';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -63,8 +63,8 @@ import {
   buildEquipmentKindRecord,
   equipmentKindKey,
   isUniqueEquipmentField,
-} from './equipment.js?v=91';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=91';
+} from './equipment.js?v=92';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=92';
 
 
 const app = initializeApp(firebaseConfig);
@@ -2565,7 +2565,7 @@ function fillKindSelect(typeId, preferredKey = '') {
   eqKindSelectSilent = true;
   try {
     sel.innerHTML =
-      `<option value="">— Nhập mới / không dùng mẫu —</option>` +
+      `<option value="">Loại khác</option>` +
       kinds
         .map(
           (k) =>
