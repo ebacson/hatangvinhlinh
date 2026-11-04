@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=104';
+} from './config.js?v=105';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=104';
+} from './forecast.js?v=105';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=104';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=104';
+} from './stats.js?v=105';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=105';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -66,8 +66,8 @@ import {
   applyBinhAcquyInferredFields,
   applyPostefAcquyYearFromSerial,
   isUniqueEquipmentField,
-} from './equipment.js?v=104';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=104';
+} from './equipment.js?v=105';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=105';
 
 
 const app = initializeApp(firebaseConfig);
@@ -2363,12 +2363,6 @@ function renderEquipmentList() {
     summary.hidden = false;
     if (state.geoLocating && state.equipmentGeoFilter === 'nearest') {
       summary.textContent = 'Đang lấy GPS…';
-    } else if (isEquipmentNearestFilter()) {
-      const d = list[0] ? siteDistanceMeters(list[0]) : null;
-      summary.textContent =
-        list.length && d != null
-          ? `Gần nhất · ${formatDistanceMeters(d)}${d <= GEO_NEAR_M ? ' · đúng vị trí' : ''}`
-          : 'Không có CSHT có tọa độ gần bạn';
     } else {
       summary.textContent = `${list.length} CSHT`;
     }
