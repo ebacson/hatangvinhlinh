@@ -1,5 +1,5 @@
 /** Quản lý thiết bị trạm — root RTDB `equipment/{CSHT_…}` (chủng loại + thông số KT). */
-import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=96';
+import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=97';
 
 const BASE = '/hatangvinhlinh';
 
@@ -81,7 +81,7 @@ const TYPE_IDS = new Set(equipmentTypes().map((t) => t.id));
 export async function loadEquipmentCatalog() {
   if (catalogCache) return catalogCache;
   if (!catalogPromise) {
-    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=96`)
+    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=97`)
       .then((r) => {
         if (!r.ok) throw new Error('Không tải được file thiết bị');
         return r.json();
@@ -671,6 +671,29 @@ export function equipmentKindLabel(typeId, deviceOrShared) {
     if (powerLabel) parts.push(powerLabel);
     else if (model && modelIsPower) parts.push(model);
     return parts.join(' · ') || 'Máy phát điện';
+  }
+  if (typeId === 'dieu_hoa') {
+    const d = deviceOrShared || {};
+    const { brand, btu, rawModel } = canonicalDieuHoa(d);
+    const model = String(d.model || rawModel || '').trim();
+    let powerLabel = '';
+    if (btu != null) {
+      powerLabel = `${btu} BTU`;
+    } else {
+      const raw = String(d.cong_suat_lanh_btu || d.cong_suat_btu || d.cong_suat || '').trim();
+      if (raw) powerLabel = /btu/i.test(raw) ? raw : `${raw} BTU`;
+    }
+    // Model giả từ BTU (vd. "24000BTU") → không lặp với công suất.
+    const modelIsPower =
+      !!model &&
+      ((btu != null && parseDieuHoaBtu({ cong_suat_lanh_btu: model }) === btu) ||
+        /^\d+\s*BTU$/i.test(model));
+    const parts = [];
+    if (brand) parts.push(brand);
+    if (model && !modelIsPower) parts.push(model);
+    if (powerLabel) parts.push(powerLabel);
+    else if (model && modelIsPower) parts.push(model);
+    return parts.join(' · ') || 'Điều hòa';
   }
   const { brand, model } = canonicalBrandModel(typeId, deviceOrShared);
   if (brand && model) return `${brand} · ${model}`;

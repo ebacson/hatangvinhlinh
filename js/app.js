@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=96';
+} from './config.js?v=97';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=96';
+} from './forecast.js?v=97';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=96';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=96';
+} from './stats.js?v=97';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=97';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -64,8 +64,8 @@ import {
   equipmentKindKey,
   equipmentKindLabel,
   isUniqueEquipmentField,
-} from './equipment.js?v=96';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=96';
+} from './equipment.js?v=97';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=97';
 
 
 const app = initializeApp(firebaseConfig);
@@ -2587,7 +2587,7 @@ function fillKindSelect(typeId, preferredKey = '') {
     const kindLab = sel.parentElement?.querySelector('label[for="eq-kind-from"]');
     if (kindLab) {
       kindLab.textContent =
-        typeId === 'may_phat_dien'
+        typeId === 'may_phat_dien' || typeId === 'dieu_hoa'
           ? 'Theo loại có sẵn (tên · model · công suất)'
           : 'Theo loại có sẵn (hãng · model)';
     }
