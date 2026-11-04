@@ -129,6 +129,38 @@ function canonMayPhatDien(d) {
   return { brand, model, modelKey, kva, rawBrand, rawModel };
 }
 
+function canonBinhAcquy(d) {
+  const rawBrand = String(d.hang_san_xuat || d.nha_san_xuat || '').trim();
+  const rawModel = String(d.model || '').trim();
+  let brand = normBrand(rawBrand);
+  let model = rawModel;
+  let modelKey = normModelKey(model, brand);
+
+  if (brand === 'POSMAX') {
+    if (modelKey === 'PNGB23000' || modelKey === 'PNGB2300') {
+      model = 'PNGB2300';
+      modelKey = 'PNGB2300';
+    }
+  }
+  if (brand === 'POSTEF' || brand === 'POSTEG') {
+    brand = 'POSTEF';
+    const tech = String(d.cong_nghe_accu || '').toLowerCase();
+    const v = String(d.dien_ap_binh || '');
+    const ah = String(d.dung_luong_binh || d.dung_luong || '');
+    const looksLfp =
+      !modelKey ||
+      modelKey === 'VLFP48100' ||
+      /lfp/i.test(model) ||
+      tech.includes('lithium') ||
+      (v === '48' && (ah === '100' || ah === ''));
+    if (looksLfp) {
+      model = 'V-LFP48100';
+      modelKey = 'VLFP48100';
+    }
+  }
+  return { brand, model: modelKey ? model : '', modelKey, rawBrand, rawModel };
+}
+
 function brandModel(typeId, d) {
   if (typeId === 'may_phat_dien') {
     const mpd = canonMayPhatDien(d);
@@ -246,6 +278,13 @@ async function main() {
           brandN = mpd.brand;
           kva = mpd.kva;
           if (!brandN) continue;
+        } else if (typeId === 'binh_acquy') {
+          const bat = canonBinhAcquy(d);
+          brand = bat.rawBrand;
+          model = bat.model;
+          mKey = bat.modelKey;
+          brandN = bat.brand;
+          if (!brandN) continue;
         } else {
           ({ brand, model } = brandModel(typeId, d));
           mKey = normModelKey(model, brand);
@@ -296,8 +335,14 @@ async function main() {
     for (const [key, g] of Object.entries(map)) {
       const brand = pickDisplayBrand(g.rawBrands, g.brandN);
       const model =
-        typeId === 'may_phat_dien' && g.mKey
-          ? g.mKey
+        (typeId === 'may_phat_dien' || typeId === 'binh_acquy') && g.mKey
+          ? typeId === 'binh_acquy' && g.mKey === 'VLFP48100'
+            ? 'V-LFP48100'
+            : typeId === 'binh_acquy' && g.mKey === 'PNGB2300'
+              ? 'PNGB2300'
+              : typeId === 'may_phat_dien'
+                ? g.mKey
+                : pickDisplayModel(g.mKey, g.rawModels)
           : pickDisplayModel(g.mKey, g.rawModels);
       const variants = new Set(
         g.locs.map((x) => `${x.brand || ''} · ${x.model || ''}`.trim())
@@ -316,6 +361,20 @@ async function main() {
           shared.cong_suat_danh_dinh_kva = String(g.kva);
         }
         if (shared.loai_nhien_lieu === 'Đâu') shared.loai_nhien_lieu = 'Dầu';
+      } else if (typeId === 'binh_acquy') {
+        if (brand) shared.hang_san_xuat = brand;
+        if (model) shared.model = model;
+        else delete shared.model;
+        if (brand === 'POSTEF' && model === 'V-LFP48100') {
+          if (!shared.cong_nghe_accu) shared.cong_nghe_accu = 'Lithium';
+          if (!shared.dien_ap_binh) shared.dien_ap_binh = '48';
+          if (!shared.dung_luong_binh) shared.dung_luong_binh = '100';
+        }
+        if (brand === 'POSMAX' && model === 'PNGB2300') {
+          if (!shared.cong_nghe_accu) shared.cong_nghe_accu = 'Pb';
+          if (!shared.dien_ap_binh) shared.dien_ap_binh = '2';
+          if (!shared.dung_luong_binh) shared.dung_luong_binh = '300';
+        }
       } else if (model) {
         shared.model = model;
       }
@@ -344,6 +403,19 @@ async function main() {
             }
           }
           if (loc.device.loai_nhien_lieu === 'Đâu') patch.loai_nhien_lieu = 'Dầu';
+        } else if (typeId === 'binh_acquy') {
+          if (model && curModel !== model) patch.model = model;
+          if (brand === 'POSTEF' && model === 'V-LFP48100') {
+            if (!loc.device.cong_nghe_accu) patch.cong_nghe_accu = 'Lithium';
+            if (!loc.device.dien_ap_binh) patch.dien_ap_binh = '48';
+            if (!loc.device.dung_luong_binh) patch.dung_luong_binh = '100';
+          }
+          if (brand === 'POSMAX' && model === 'PNGB2300') {
+            if (curModel !== 'PNGB2300') patch.model = 'PNGB2300';
+            if (!loc.device.cong_nghe_accu) patch.cong_nghe_accu = 'Pb';
+            if (!loc.device.dien_ap_binh) patch.dien_ap_binh = '2';
+            if (!loc.device.dung_luong_binh) patch.dung_luong_binh = '300';
+          }
         } else if (model && curModel !== model) {
           patch.model = model;
         }

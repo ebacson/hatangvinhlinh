@@ -1,5 +1,5 @@
 /** Quản lý thiết bị trạm — root RTDB `equipment/{CSHT_…}` (chủng loại + thông số KT). */
-import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=88';
+import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=89';
 
 const BASE = '/hatangvinhlinh';
 
@@ -81,7 +81,7 @@ const TYPE_IDS = new Set(equipmentTypes().map((t) => t.id));
 export async function loadEquipmentCatalog() {
   if (catalogCache) return catalogCache;
   if (!catalogPromise) {
-    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=88`)
+    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=89`)
       .then((r) => {
         if (!r.ok) throw new Error('Không tải được file thiết bị');
         return r.json();
@@ -488,6 +488,51 @@ export function canonicalMayPhatDien(device) {
   };
 }
 
+/**
+ * Bình ắc quy: gom POSMAX PNGB23000→PNGB2300; POSTEF thiếu model → V-LFP48100.
+ */
+export function canonicalBinhAcquy(device) {
+  const d = device || {};
+  const rawBrand = String(d.hang_san_xuat || d.nha_san_xuat || '').trim();
+  const rawModel = String(d.model || '').trim();
+  let brand = normalizeEquipmentBrand(rawBrand);
+  let model = rawModel;
+  let modelKey = normalizeEquipmentModelKey(model, brand);
+
+  if (brand === 'POSMAX') {
+    // PNGB23000 = lỗi thừa số 0 của PNGB2300 (cùng Pb 2V 300Ah)
+    if (modelKey === 'PNGB23000' || modelKey === 'PNGB2300') {
+      model = 'PNGB2300';
+      modelKey = 'PNGB2300';
+    }
+  }
+
+  if (brand === 'POSTEF' || brand === 'POSTEG') {
+    brand = 'POSTEF';
+    const tech = String(d.cong_nghe_accu || '').toLowerCase();
+    const v = String(d.dien_ap_binh || '');
+    const ah = String(d.dung_luong_binh || d.dung_luong || '');
+    const looksLfp =
+      !modelKey ||
+      modelKey === 'VLFP48100' ||
+      /lfp/i.test(model) ||
+      tech.includes('lithium') ||
+      (v === '48' && (ah === '100' || ah === ''));
+    if (looksLfp) {
+      model = 'V-LFP48100';
+      modelKey = 'VLFP48100';
+    }
+  }
+
+  return {
+    brand,
+    model: modelKey ? model : '',
+    modelKey,
+    rawBrand,
+    rawModel,
+  };
+}
+
 /** Hãng/model đã chuẩn (để ghi kinds + hiển thị gom mẫu). */
 export function canonicalBrandModel(typeId, device) {
   if (typeId === 'may_phat_dien') {
@@ -499,6 +544,16 @@ export function canonicalBrandModel(typeId, device) {
       rawBrand: mpd.rawBrand,
       rawModel: mpd.rawModel,
       kva: mpd.kva,
+    };
+  }
+  if (typeId === 'binh_acquy') {
+    const bat = canonicalBinhAcquy(device);
+    return {
+      brand: bat.brand,
+      model: bat.model,
+      modelKey: bat.modelKey,
+      rawBrand: bat.rawBrand,
+      rawModel: bat.rawModel,
     };
   }
   const { brand, model } = brandModelParts(typeId, device);
@@ -557,6 +612,19 @@ export function buildEquipmentKindRecord(typeId, device, who) {
       shared.cong_suat_danh_dinh_kva = model === '10KVA' ? '10' : '20';
     } else if (canon.kva != null && !shared.cong_suat_danh_dinh_kva) {
       shared.cong_suat_danh_dinh_kva = String(canon.kva);
+    }
+  } else if (typeId === 'binh_acquy') {
+    if (brand) shared.hang_san_xuat = brand;
+    if (model) shared.model = model;
+    if (brand === 'POSTEF' && model === 'V-LFP48100') {
+      if (!shared.cong_nghe_accu) shared.cong_nghe_accu = 'Lithium';
+      if (!shared.dien_ap_binh) shared.dien_ap_binh = '48';
+      if (!shared.dung_luong_binh) shared.dung_luong_binh = '100';
+    }
+    if (brand === 'POSMAX' && model === 'PNGB2300') {
+      if (!shared.cong_nghe_accu) shared.cong_nghe_accu = 'Pb';
+      if (!shared.dien_ap_binh) shared.dien_ap_binh = '2';
+      if (!shared.dung_luong_binh) shared.dung_luong_binh = '300';
     }
   } else if (model && shared.model != null) {
     shared.model = model;
