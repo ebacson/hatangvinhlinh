@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=80';
+} from './config.js?v=81';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=80';
+} from './forecast.js?v=81';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=80';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=80';
+} from './stats.js?v=81';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=81';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -62,14 +62,16 @@ import {
   sharedFieldsFromDevice,
   buildEquipmentKindRecord,
   isUniqueEquipmentField,
-} from './equipment.js?v=80';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=80';
+} from './equipment.js?v=81';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=81';
 
 
 const app = initializeApp(firebaseConfig);
 
 /** Draft thiết bị đang sửa trong sheet. */
 let equipmentDraft = null;
+/** Bỏ qua sự kiện change khi đổ lại #eq-kind-from bằng code. */
+let eqKindSelectSilent = false;
 // Persist session (IndexedDB → localStorage) so PWA/standalone không mất đăng nhập mỗi lần mở.
 let auth;
 try {
@@ -2364,9 +2366,16 @@ function captureEquipmentFormIntoDraft() {
   if (!typeDef) return;
   const root = $('#eq-fields');
   if (!root) return;
+  // Tránh ghi đè nhầm khi DOM form chưa khớp thiết bị đang chọn (sau Thêm / đổi #).
+  const expected = `${equipmentDraft.maCsht}|${equipmentDraft.typeId}|${equipmentDraft.index}`;
+  if (root.dataset.stamp && root.dataset.stamp !== expected) return;
   const vals = readEquipmentFormValues(typeDef, root);
   const list = equipmentDraft.byType[equipmentDraft.typeId] || [];
   while (list.length <= equipmentDraft.index) list.push({});
+  // Không thay bản nháp đã có bằng object rỗng (mất thiết bị cũ).
+  if (!countEquipmentDataFields(vals) && countEquipmentDataFields(list[equipmentDraft.index])) {
+    return;
+  }
   list[equipmentDraft.index] = vals;
   equipmentDraft.byType[equipmentDraft.typeId] = list;
 }
@@ -2421,7 +2430,6 @@ function renderEquipmentEditor(csht, forceFields = false) {
       .join('');
     idxSel.value = String(equipmentDraft.index);
   }
-  fillKindSelect(equipmentDraft.typeId);
   const typeDef = equipmentTypeById(equipmentDraft.typeId);
   const fields = $('#eq-fields');
   const stamp = `${equipmentDraft.maCsht}|${equipmentDraft.typeId}|${equipmentDraft.index}`;
@@ -2429,6 +2437,8 @@ function renderEquipmentEditor(csht, forceFields = false) {
     fields.innerHTML = buildEquipmentFieldsHtml(typeDef, list[equipmentDraft.index] || {});
     fields.dataset.stamp = stamp;
   }
+  // Đổ list mẫu sau khi gắn stamp form — silent, không áp dụng/xóa dữ liệu.
+  fillKindSelect(equipmentDraft.typeId, $('#eq-kind-from')?.value || '');
 }
 
 function onEquipmentTypeChange() {
@@ -2468,11 +2478,12 @@ function kindsForType(typeId) {
   );
 }
 
-function fillKindSelect(typeId) {
+function fillKindSelect(typeId, preferredKey = '') {
   const sel = $('#eq-kind-from');
   if (!sel) return;
   const kinds = kindsForType(typeId);
-  const cur = sel.value || '';
+  const want = preferredKey || '';
+  eqKindSelectSilent = true;
   sel.innerHTML =
     `<option value="">— Nhập mới / không dùng mẫu —</option>` +
     kinds
@@ -2481,8 +2492,8 @@ function fillKindSelect(typeId) {
           `<option value="${escapeAttr(k.kindKey)}">${escapeHtml(k.label || k.kindKey)}</option>`
       )
       .join('');
-  if (cur && [...sel.options].some((o) => o.value === cur)) sel.value = cur;
-  else sel.value = '';
+  sel.value = want && [...sel.options].some((o) => o.value === want) ? want : '';
+  eqKindSelectSilent = false;
 }
 
 function applyKindTemplateToCurrentDevice(kindKey) {
@@ -2495,15 +2506,9 @@ function applyKindTemplateToCurrentDevice(kindKey) {
   while (list.length <= idx) list.push({});
   const current = { ...(list[idx] || {}) };
 
+  // Bỏ chọn mẫu: không xóa dữ liệu đang có — chỉ thôi áp dụng mẫu.
   if (!kindKey) {
-    // Giữ field unique đã nhập; xóa field shared để nhập lại
-    for (const f of typeDef.fields) {
-      if (isUniqueEquipmentField(f.key)) continue;
-      delete current[f.key];
-    }
-    list[idx] = current;
-    equipmentDraft.byType[typeId] = list;
-    renderEquipmentEditor(equipmentDraft.maCsht, true);
+    fillKindSelect(typeId, '');
     return;
   }
 
@@ -2514,29 +2519,31 @@ function applyKindTemplateToCurrentDevice(kindKey) {
     return;
   }
   const shared = sharedFieldsFromDevice(typeDef, kind);
-  // Unique giữ nguyên nếu đã có; shared lấy từ mẫu
   const next = { ...current };
   for (const f of typeDef.fields) {
     if (isUniqueEquipmentField(f.key)) continue;
     if (shared[f.key] != null) next[f.key] = shared[f.key];
-    else delete next[f.key];
   }
   list[idx] = next;
   equipmentDraft.byType[typeId] = list;
   renderEquipmentEditor(equipmentDraft.maCsht, true);
+  fillKindSelect(typeId, kindKey);
   toast(`Đã áp dụng loại: ${kind.label || kindKey}`);
 }
 
 function addEquipmentDevice() {
   captureEquipmentFormIntoDraft();
   if (!equipmentDraft) return;
-  const list = equipmentDraft.byType[equipmentDraft.typeId] || [];
+  const typeId = equipmentDraft.typeId;
+  const list = [...(equipmentDraft.byType[typeId] || [])];
   list.push({});
-  equipmentDraft.byType[equipmentDraft.typeId] = list;
+  equipmentDraft.byType[typeId] = list;
   equipmentDraft.index = list.length - 1;
-  const kindSel = $('#eq-kind-from');
-  if (kindSel) kindSel.value = '';
+  // Đánh dấu form DOM lệch index để capture không ghi đè nhầm trước khi render.
+  const fields = $('#eq-fields');
+  if (fields) fields.dataset.stamp = '';
   renderEquipmentEditor(equipmentDraft.maCsht, true);
+  fillKindSelect(typeId, '');
 }
 
 async function upsertEquipmentKindsFromDevices(typeId, devices, who) {
@@ -2877,6 +2884,7 @@ function bindEvents() {
   $('#eq-type')?.addEventListener('change', onEquipmentTypeChange);
   $('#eq-device-index')?.addEventListener('change', onEquipmentIndexChange);
   $('#eq-kind-from')?.addEventListener('change', (e) => {
+    if (eqKindSelectSilent) return;
     captureEquipmentFormIntoDraft();
     applyKindTemplateToCurrentDevice(e.target.value || '');
   });
@@ -2947,9 +2955,10 @@ function bindStationsListener() {
     if (!state.user) return;
     state.equipmentKinds = snap.val() || {};
     if (state.sheetMode === 'equipment' && equipmentDraft) {
-      fillKindSelect(equipmentDraft.typeId);
+      fillKindSelect(equipmentDraft.typeId, $('#eq-kind-from')?.value || '');
+    } else {
+      render();
     }
-    render();
   });
 }
 
