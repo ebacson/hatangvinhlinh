@@ -2645,7 +2645,7 @@ function applyKindTemplateToCurrentDevice(kindKey) {
   equipmentDraft.byType[typeId] = list;
   renderEquipmentEditor(equipmentDraft.maCsht, true);
   fillKindSelect(typeId, kindKey);
-  toast(`Đã áp dụng loại: ${kind.label || kindKey}`);
+  toast(`Đã áp dụng loại: ${equipmentKindLabel(typeId, kind) || kind.label || kindKey}`);
 }
 
 function addEquipmentDevice() {
