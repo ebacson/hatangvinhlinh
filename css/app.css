@@ -1123,6 +1123,18 @@ main {
   margin-bottom: 6px;
 }
 
+.eq-directions-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-size: 0.78rem;
+  padding: 6px 10px;
+}
+
+.eq-directions-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .station-id {
   display: flex;
   flex-wrap: wrap;

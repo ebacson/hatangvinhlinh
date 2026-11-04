@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=106';
+} from './config.js?v=107';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=106';
+} from './forecast.js?v=107';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=106';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=106';
+} from './stats.js?v=107';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=107';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -66,8 +66,8 @@ import {
   applyBinhAcquyInferredFields,
   applyPostefAcquyYearFromSerial,
   isUniqueEquipmentField,
-} from './equipment.js?v=106';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=106';
+} from './equipment.js?v=107';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=107';
 
 
 const app = initializeApp(firebaseConfig);
@@ -912,6 +912,22 @@ function formatDistanceMeters(m) {
   if (m < 1000) return `${Math.round(m)} m`;
   const km = m / 1000;
   return `${km < 10 ? km.toFixed(1) : Math.round(km)} km`;
+}
+
+/** Google Maps chỉ đường tới lat/long (điểm xuất phát = vị trí hiện tại trên app Maps). */
+function googleMapsDirectionsUrl(lat, lng) {
+  const dest = `${Number(lat)},${Number(lng)}`;
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}&travelmode=driving`;
+}
+
+function openSiteDirections(rowOrSite) {
+  const c = siteLatLng(rowOrSite);
+  if (!c) {
+    toast('Trạm chưa có tọa độ LAT/LONG');
+    return;
+  }
+  const url = googleMapsDirectionsUrl(c.lat, c.lng);
+  window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 function siteDistanceMeters(rowOrSite) {
@@ -2408,6 +2424,12 @@ function renderEquipmentList() {
             r.maCsht
           )}">${expanded ? 'Thu gọn' : 'Chi tiết'}</button>`
         : '';
+      const hasCoords = siteLatLng(r) != null;
+      const dirBtn = hasCoords
+        ? `<button type="button" class="btn-outline station-action-btn eq-directions-btn" data-action="eq-directions" data-csht="${escapeAttr(
+            r.maCsht
+          )}">Chỉ đường</button>`
+        : `<button type="button" class="btn-outline station-action-btn eq-directions-btn" disabled title="Chưa có tọa độ">Chỉ đường</button>`;
       return `<article class="station-card${expanded ? ' is-eq-expanded' : ''}${
         distNear ? ' is-geo-near' : ''
       }" data-csht="${escapeAttr(r.maCsht)}" style="--i:${index}">
@@ -2416,6 +2438,7 @@ function renderEquipmentList() {
           <div class="station-id">
             <span class="station-code">${escapeHtml(r.maTram || r.maCsht)}</span>
           </div>
+          ${dirBtn}
         </header>
         <p class="station-name">${escapeHtml(r.tenTram || 'Chưa có tên')}</p>
         <p class="station-addr">${escapeHtml(r.maCsht)}${escapeHtml(maExtra)} · LAT/LONG: ${geo}</p>
@@ -3040,6 +3063,14 @@ function bindEvents() {
     }
   });
   $('#equipment-list')?.addEventListener('click', (e) => {
+    const dirBtn = e.target.closest('[data-action="eq-directions"][data-csht]');
+    if (dirBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const site = state.equipmentByCsht?.[dirBtn.dataset.csht];
+      openSiteDirections(site || { lat: null, long: null });
+      return;
+    }
     const toggleBtn = e.target.closest('[data-action="eq-toggle"][data-csht]');
     if (toggleBtn) {
       e.preventDefault();
