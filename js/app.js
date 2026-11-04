@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=94';
+} from './config.js?v=95';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=94';
+} from './forecast.js?v=95';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=94';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=94';
+} from './stats.js?v=95';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=95';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -63,8 +63,8 @@ import {
   buildEquipmentKindRecord,
   equipmentKindKey,
   isUniqueEquipmentField,
-} from './equipment.js?v=94';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=94';
+} from './equipment.js?v=95';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=95';
 
 
 const app = initializeApp(firebaseConfig);
@@ -1297,19 +1297,6 @@ function renderUserModeration() {
     .join('');
 }
 
-function countMayNoScEvents(eventsMap) {
-  let n = 0;
-  for (const ev of Object.values(eventsMap || {})) {
-    if (!ev || typeof ev !== 'object') continue;
-    if (!String(ev.deviceType || '')
-      .toUpperCase()
-      .includes('MAY_NO'))
-      continue;
-    if (String(ev.type || '').toUpperCase() === 'SC') n += 1;
-  }
-  return n;
-}
-
 function buildRunHistory(eventsMap, station) {
   const rows = extractMayNoRuns(eventsMap).map((r) => ({
     id: r.id,
@@ -1350,10 +1337,7 @@ function renderRunHistory() {
     return;
   }
   if (!state.runHistory.length) {
-    const scN = countMayNoScEvents(cachedRunEvents);
-    el.innerHTML = scN
-      ? `<p class="muted run-history-empty">Chưa có lần chạy hoàn tất (KP máy nổ).<br/>Đã nhận ${scN} tin SC máy nổ nhưng chưa có KP kết thúc tương ứng.</p>`
-      : `<p class="muted run-history-empty">Chưa có lần chạy máy nổ nào được ghi (KP MAY_NO).</p>`;
+    el.innerHTML = `<p class="muted run-history-empty">Chưa có lần chạy hoàn tất (KP máy nổ).</p>`;
     return;
   }
   const canManage = canManageRunHistory();
