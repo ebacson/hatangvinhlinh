@@ -34,6 +34,10 @@ const BRAND_ALIASES = {
   KOBUTA: 'KUBOTA',
   HUUTOAN: 'HUU TOAN',
   'KYO POWER': 'KYO',
+  NAKAGAWA: 'NAGAKAWA',
+  DAIKIN: 'DAIKIN',
+  NAGAKAWA: 'NAGAKAWA',
+  SUMIKURA: 'SUMIKURA',
 };
 
 function isShared(key) {
@@ -127,6 +131,38 @@ function canonMayPhatDien(d) {
     model = modelUseful.replace(/\s+/g, ' ');
   }
   return { brand, model, modelKey, kva, rawBrand, rawModel };
+}
+
+function normalizeInstall(raw) {
+  const s = String(raw || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+  if (!s) return '';
+  if (s.includes('tủ đứng') || s.includes('tu dung')) return 'Tủ đứng';
+  if (s.includes('treo tường') || s.includes('treo tuong')) return 'Treo tường';
+  if (s.includes('âm trần') || s.includes('am tran')) return 'Âm trần';
+  if (s.includes('áp trần') || s.includes('ap tran')) return 'Áp trần';
+  return s.replace(/(^|\s)\S/g, (c) => c.toUpperCase());
+}
+
+function parseBtu(d) {
+  const raw = String(d.cong_suat_lanh_btu || d.cong_suat_btu || d.cong_suat || '').trim();
+  if (!raw) return null;
+  const m = raw.replace(/,/g, '').match(/(\d+(?:\.\d+)?)/);
+  if (!m) return null;
+  const n = Math.round(Number(m[1]));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function canonDieuHoa(d) {
+  const rawBrand = String(d.hang_san_xuat || d.nha_san_xuat || '').trim();
+  const brand = normBrand(rawBrand.toUpperCase());
+  const btu = parseBtu(d);
+  const install = normalizeInstall(d.kieu_lap_dat);
+  const model = btu != null ? `${btu}BTU` : '';
+  const modelKey = model;
+  return { brand, model, modelKey, btu, install, rawBrand, rawModel: String(d.model || '').trim() };
 }
 
 function canonBinhAcquy(d) {
@@ -285,6 +321,15 @@ async function main() {
           mKey = bat.modelKey;
           brandN = bat.brand;
           if (!brandN) continue;
+        } else if (typeId === 'dieu_hoa') {
+          const dh = canonDieuHoa(d);
+          brand = dh.rawBrand;
+          model = dh.model;
+          mKey = dh.modelKey;
+          brandN = dh.brand;
+          if (!brandN) continue;
+          // stash install/btu on a temp field via locs later
+          d.__canonDh = dh;
         } else {
           ({ brand, model } = brandModel(typeId, d));
           mKey = normModelKey(model, brand);
@@ -334,16 +379,11 @@ async function main() {
     alive[typeId] = {};
     for (const [key, g] of Object.entries(map)) {
       const brand = pickDisplayBrand(g.rawBrands, g.brandN);
-      const model =
-        (typeId === 'may_phat_dien' || typeId === 'binh_acquy') && g.mKey
-          ? typeId === 'binh_acquy' && g.mKey === 'VLFP48100'
-            ? 'V-LFP48100'
-            : typeId === 'binh_acquy' && g.mKey === 'PNGB2300'
-              ? 'PNGB2300'
-              : typeId === 'may_phat_dien'
-                ? g.mKey
-                : pickDisplayModel(g.mKey, g.rawModels)
-          : pickDisplayModel(g.mKey, g.rawModels);
+      let model = pickDisplayModel(g.mKey, g.rawModels);
+      if (typeId === 'may_phat_dien' && g.mKey) model = g.mKey;
+      if (typeId === 'binh_acquy' && g.mKey === 'VLFP48100') model = 'V-LFP48100';
+      if (typeId === 'binh_acquy' && g.mKey === 'PNGB2300') model = 'PNGB2300';
+      if (typeId === 'dieu_hoa' && g.mKey) model = g.mKey;
       const variants = new Set(
         g.locs.map((x) => `${x.brand || ''} · ${x.model || ''}`.trim())
       );
@@ -374,6 +414,21 @@ async function main() {
           if (!shared.cong_nghe_accu) shared.cong_nghe_accu = 'Pb';
           if (!shared.dien_ap_binh) shared.dien_ap_binh = '2';
           if (!shared.dung_luong_binh) shared.dung_luong_binh = '300';
+        }
+      } else if (typeId === 'dieu_hoa') {
+        if (brand) shared.hang_san_xuat = brand;
+        delete shared.model;
+        const btu = g.mKey && g.mKey.endsWith('BTU') ? g.mKey.replace(/BTU$/i, '') : null;
+        if (btu) shared.cong_suat_lanh_btu = btu;
+        // install: most common normalized among locs
+        const instCounts = new Map();
+        for (const loc of g.locs) {
+          const inst = loc.device.__canonDh?.install || normalizeInstall(loc.device.kieu_lap_dat);
+          if (!inst) continue;
+          instCounts.set(inst, (instCounts.get(inst) || 0) + 1);
+        }
+        if (instCounts.size) {
+          shared.kieu_lap_dat = [...instCounts.entries()].sort((a, b) => b[1] - a[1])[0][0];
         }
       } else if (model) {
         shared.model = model;
@@ -415,6 +470,15 @@ async function main() {
             if (!loc.device.cong_nghe_accu) patch.cong_nghe_accu = 'Pb';
             if (!loc.device.dien_ap_binh) patch.dien_ap_binh = '2';
             if (!loc.device.dung_luong_binh) patch.dung_luong_binh = '300';
+          }
+        } else if (typeId === 'dieu_hoa') {
+          const dh = loc.device.__canonDh || canonDieuHoa(loc.device);
+          if (brand && curBrand !== brand) patch.hang_san_xuat = brand;
+          if (dh.btu != null && String(loc.device.cong_suat_lanh_btu || '') !== String(dh.btu)) {
+            patch.cong_suat_lanh_btu = String(dh.btu);
+          }
+          if (dh.install && String(loc.device.kieu_lap_dat || '') !== dh.install) {
+            patch.kieu_lap_dat = dh.install;
           }
         } else if (model && curModel !== model) {
           patch.model = model;

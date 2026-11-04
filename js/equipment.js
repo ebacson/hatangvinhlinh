@@ -1,5 +1,5 @@
 /** Quản lý thiết bị trạm — root RTDB `equipment/{CSHT_…}` (chủng loại + thông số KT). */
-import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=89';
+import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=90';
 
 const BASE = '/hatangvinhlinh';
 
@@ -81,7 +81,7 @@ const TYPE_IDS = new Set(equipmentTypes().map((t) => t.id));
 export async function loadEquipmentCatalog() {
   if (catalogCache) return catalogCache;
   if (!catalogPromise) {
-    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=89`)
+    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=90`)
       .then((r) => {
         if (!r.ok) throw new Error('Không tải được file thiết bị');
         return r.json();
@@ -336,6 +336,11 @@ const BRAND_ALIASES = {
   KOBUTA: 'KUBOTA',
   HUUTOAN: 'HUU TOAN',
   'KYO POWER': 'KYO',
+  // Điều hòa
+  NAGAKAWA: 'NAGAKAWA',
+  NAKAGAWA: 'NAGAKAWA',
+  SUMIKURA: 'SUMIKURA',
+  DAIKIN: 'DAIKIN',
 };
 
 /** Chuẩn hóa hãng để gom mẫu trùng. */
@@ -488,6 +493,59 @@ export function canonicalMayPhatDien(device) {
   };
 }
 
+/** Chuẩn hóa kiểu lắp đặt điều hòa. */
+export function normalizeDieuHoaInstallType(raw) {
+  const s = String(raw || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+  if (!s) return '';
+  if (s.includes('tủ đứng') || s.includes('tu dung')) return 'Tủ đứng';
+  if (s.includes('treo tường') || s.includes('treo tuong') || s.includes('treo tường')) return 'Treo tường';
+  if (s.includes('âm trần') || s.includes('am tran')) return 'Âm trần';
+  if (s.includes('áp trần') || s.includes('ap tran')) return 'Áp trần';
+  // Title-case nhẹ
+  return s.replace(/(^|\s)\S/g, (c) => c.toUpperCase());
+}
+
+/** Parse BTU từ công suất lạnh. */
+export function parseDieuHoaBtu(device) {
+  const d = device || {};
+  const raw = String(d.cong_suat_lanh_btu || d.cong_suat_btu || d.cong_suat || '').trim();
+  if (!raw) return null;
+  const m = raw.replace(/,/g, '').match(/(\d+(?:\.\d+)?)/);
+  if (!m) return null;
+  const n = Math.round(Number(m[1]));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * Điều hòa: gom theo hãng + công suất BTU (khi có).
+ * VD: DAIKIN · 24000BTU
+ */
+export function canonicalDieuHoa(device) {
+  const d = device || {};
+  const rawBrand = String(d.hang_san_xuat || d.nha_san_xuat || '').trim();
+  const brand = normalizeEquipmentBrand(rawBrand.toUpperCase());
+  const btu = parseDieuHoaBtu(d);
+  const install = normalizeDieuHoaInstallType(d.kieu_lap_dat);
+  let model = '';
+  let modelKey = '';
+  if (btu != null) {
+    model = `${btu}BTU`;
+    modelKey = `${btu}BTU`;
+  }
+  return {
+    brand,
+    model,
+    modelKey,
+    btu,
+    install,
+    rawBrand,
+    rawModel: String(d.model || '').trim(),
+  };
+}
+
 /**
  * Bình ắc quy: gom POSMAX PNGB23000→PNGB2300; POSTEF thiếu model → V-LFP48100.
  */
@@ -554,6 +612,18 @@ export function canonicalBrandModel(typeId, device) {
       modelKey: bat.modelKey,
       rawBrand: bat.rawBrand,
       rawModel: bat.rawModel,
+    };
+  }
+  if (typeId === 'dieu_hoa') {
+    const dh = canonicalDieuHoa(device);
+    return {
+      brand: dh.brand,
+      model: dh.model,
+      modelKey: dh.modelKey,
+      rawBrand: dh.rawBrand,
+      rawModel: dh.rawModel,
+      btu: dh.btu,
+      install: dh.install,
     };
   }
   const { brand, model } = brandModelParts(typeId, device);
@@ -626,6 +696,12 @@ export function buildEquipmentKindRecord(typeId, device, who) {
       if (!shared.dien_ap_binh) shared.dien_ap_binh = '2';
       if (!shared.dung_luong_binh) shared.dung_luong_binh = '300';
     }
+  } else if (typeId === 'dieu_hoa') {
+    if (brand) shared.hang_san_xuat = brand;
+    if (canon.btu != null) shared.cong_suat_lanh_btu = String(canon.btu);
+    if (canon.install) shared.kieu_lap_dat = canon.install;
+    // Không ghi model giả; BTU nằm ở cong_suat_lanh_btu
+    delete shared.model;
   } else if (model && shared.model != null) {
     shared.model = model;
   }
