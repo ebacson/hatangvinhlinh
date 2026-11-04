@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=81';
+} from './config.js?v=82';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=81';
+} from './forecast.js?v=82';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=81';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=81';
+} from './stats.js?v=82';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=82';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -62,8 +62,8 @@ import {
   sharedFieldsFromDevice,
   buildEquipmentKindRecord,
   isUniqueEquipmentField,
-} from './equipment.js?v=81';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=81';
+} from './equipment.js?v=82';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=82';
 
 
 const app = initializeApp(firebaseConfig);
@@ -2275,7 +2275,7 @@ function renderEquipmentList() {
             <div class="eq-card-actions">
               <button type="button" class="btn-outline station-action-btn" data-action="equipment" data-csht="${escapeAttr(
                 r.maCsht
-              )}">Thêm / sửa</button>
+              )}">Thêm</button>
               ${detailBtn}
             </div>
           </div>
