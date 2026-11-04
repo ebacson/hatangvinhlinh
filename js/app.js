@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=99';
+} from './config.js?v=100';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=99';
+} from './forecast.js?v=100';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=99';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=99';
+} from './stats.js?v=100';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=100';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -66,8 +66,8 @@ import {
   applyBinhAcquyInferredFields,
   applyPostefAcquyYearFromSerial,
   isUniqueEquipmentField,
-} from './equipment.js?v=99';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=99';
+} from './equipment.js?v=100';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=100';
 
 
 const app = initializeApp(firebaseConfig);
@@ -102,8 +102,6 @@ const state = {
   stations: [],
   query: '',
   equipmentQuery: '',
-  /** 'all' | 'vinhlinh' */
-  equipmentOrgFilter: 'vinhlinh',
   /** Map maCsht → true khi đang xem chi tiết */
   equipmentExpanded: {},
   /** CSHT đang mở sheet thiết bị */
@@ -2121,18 +2119,9 @@ function renderEquipmentInventoryHtml(site, maCsht) {
   return `<div class="eq-inventory">${blocks.join('')}</div>`;
 }
 
-function isVinhLinhStationCode(code) {
-  return /(?:^|[^A-Z])(?:GLH|VLH)/i.test(String(code || ''));
-}
-
-function siteBelongsToVinhLinh(row) {
-  const codes = [row.maTram, ...(row.maTrams || [])].filter(Boolean);
-  return codes.some(isVinhLinhStationCode);
-}
-
 function filteredEquipmentSites() {
   const q = state.equipmentQuery.trim().toLowerCase();
-  let rows = Object.entries(state.equipmentByCsht || {}).map(([maCsht, site]) => {
+  const rows = Object.entries(state.equipmentByCsht || {}).map(([maCsht, site]) => {
     const maTrams = Array.isArray(site?.maTrams)
       ? [...new Set(site.maTrams.filter(Boolean).map((x) => formatMaTram(x)).filter(Boolean))]
       : site?.maTram
@@ -2148,9 +2137,6 @@ function filteredEquipmentSites() {
       site: site || {},
     };
   });
-  if (state.equipmentOrgFilter === 'vinhlinh') {
-    rows = rows.filter(siteBelongsToVinhLinh);
-  }
   rows.sort((a, b) =>
     (a.maTram || a.maCsht).localeCompare(b.maTram || b.maCsht, 'vi')
   );
@@ -2167,8 +2153,6 @@ function exportEquipmentExcel() {
     toast('Không có CSHT nào để xuất');
     return;
   }
-  const orgLabel =
-    state.equipmentOrgFilter === 'vinhlinh' ? 'To-ha-tang-Vinh-Linh' : 'Tat-ca';
   const sheets = [];
 
   // Sheet danh sách CSHT (giống mục lục)
@@ -2221,7 +2205,7 @@ function exportEquipmentExcel() {
   }
 
   const stamp = new Date().toISOString().slice(0, 10);
-  downloadExcelWorkbook(sheets, `bao-cao-thiet-bi-${safeFilePart(orgLabel)}-${stamp}`);
+  downloadExcelWorkbook(sheets, `bao-cao-thiet-bi-${stamp}`);
   toast(`Đã xuất ${list.length} CSHT · ${sheets.length} sheet`);
 }
 
@@ -2235,22 +2219,14 @@ function renderEquipmentList() {
   const list = filteredEquipmentSites();
   if (summary) {
     summary.hidden = false;
-    const org =
-      state.equipmentOrgFilter === 'vinhlinh' ? ' · Tổ HT Vĩnh Linh' : '';
-    summary.textContent = `${list.length} CSHT${org}`;
-  }
-  const orgSel = $('#equipment-org-filter');
-  if (orgSel && orgSel.value !== state.equipmentOrgFilter) {
-    orgSel.value = state.equipmentOrgFilter;
+    summary.textContent = `${list.length} CSHT`;
   }
   if (!list.length) {
     root.innerHTML = '';
     empty.hidden = false;
     empty.innerHTML = state.equipmentQuery.trim()
       ? `<p class="empty-title">Không tìm thấy CSHT</p><p class="empty-desc">Thử mã hoặc tên khác.</p>`
-      : state.equipmentOrgFilter === 'vinhlinh'
-        ? `<p class="empty-title">Không có trạm GLH/VLH</p><p class="empty-desc">Đổi bộ lọc Tổ hoặc kiểm tra mã trạm.</p>`
-        : `<p class="empty-title">Chưa có dữ liệu thiết bị</p>`;
+      : `<p class="empty-title">Chưa có dữ liệu thiết bị</p>`;
     return;
   }
   empty.hidden = true;
@@ -2870,10 +2846,6 @@ function bindEvents() {
   });
   $('#equipment-search')?.addEventListener('input', (e) => {
     state.equipmentQuery = e.target.value;
-    renderEquipmentList();
-  });
-  $('#equipment-org-filter')?.addEventListener('change', (e) => {
-    state.equipmentOrgFilter = e.target.value === 'vinhlinh' ? 'vinhlinh' : 'all';
     renderEquipmentList();
   });
   $('#equipment-export-excel')?.addEventListener('click', () => {
