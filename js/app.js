@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=86';
+} from './config.js?v=87';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=86';
+} from './forecast.js?v=87';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=86';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=86';
+} from './stats.js?v=87';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=87';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -63,8 +63,8 @@ import {
   buildEquipmentKindRecord,
   equipmentKindKey,
   isUniqueEquipmentField,
-} from './equipment.js?v=86';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=86';
+} from './equipment.js?v=87';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=87';
 
 
 const app = initializeApp(firebaseConfig);

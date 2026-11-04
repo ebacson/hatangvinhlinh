@@ -1,5 +1,5 @@
 /** Quản lý thiết bị trạm — root RTDB `equipment/{CSHT_…}` (chủng loại + thông số KT). */
-import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=86';
+import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=87';
 
 const BASE = '/hatangvinhlinh';
 
@@ -81,7 +81,7 @@ const TYPE_IDS = new Set(equipmentTypes().map((t) => t.id));
 export async function loadEquipmentCatalog() {
   if (catalogCache) return catalogCache;
   if (!catalogPromise) {
-    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=86`)
+    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=87`)
       .then((r) => {
         if (!r.ok) throw new Error('Không tải được file thiết bị');
         return r.json();
@@ -325,6 +325,70 @@ export function sharedFieldsFromDevice(typeDef, device) {
   return out;
 }
 
+const BRAND_ALIASES = {
+  POSTEG: 'POSTEF',
+  POMAX: 'POSMAX',
+  'POS MAX': 'POSMAX',
+};
+
+/** Chuẩn hóa hãng để gom mẫu trùng. */
+export function normalizeEquipmentBrand(brand) {
+  const b = String(brand || '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, ' ');
+  return BRAND_ALIASES[b] || b;
+}
+
+/**
+ * Chuẩn hóa model để gom biến thể viết (space/gạch/V5.0/NETSUR…).
+ * Trả về chuỗi compact dùng làm phần key.
+ */
+export function normalizeEquipmentModelKey(model, brand = '') {
+  let s = String(model || '')
+    .trim()
+    .toUpperCase();
+  if (!s) return '';
+  const b = normalizeEquipmentBrand(brand);
+  if (b) {
+    const compactB = b.replace(/\s+/g, '');
+    if (s.startsWith(b)) s = s.slice(b.length);
+    else if (s.startsWith(compactB)) s = s.slice(compactB.length);
+    s = s.replace(/^[\s\-_\/]+/, '');
+  }
+  s = s.replace(/_/g, ' ');
+  s = s.replace(/\bNETSUARE\b/g, 'NETSURE').replace(/\bNETSUR\b/g, 'NETSURE');
+  s = s.replace(/\bV\s*(\d+)(?:\.0+)+\b/g, 'V$1');
+  s = s.replace(/\bREV\.?\s*0*(\d+)\b/g, 'REV$1');
+  // Compact: bỏ space, gạch, chấm, slash → ZXDU68 B301 V5.0 ≈ ZXDU68B301V5
+  s = s.replace(/[\s\-\.\/]+/g, '');
+  const bCompact = b.replace(/[^A-Z0-9]/g, '');
+  if (bCompact && s === bCompact) return '';
+  return s;
+}
+
+/** Emerson Network Power → Vertiv; USA/POSTEF gắn Netsure cũng gom về VERTIV. */
+export function canonicalKindBrand(brand, modelKey = '') {
+  let b = normalizeEquipmentBrand(brand);
+  const mk = String(modelKey || '').toUpperCase();
+  if (mk.includes('NETSURE') && ['EMERSON', 'VERTIV', 'USA', 'POSTEF'].includes(b)) {
+    return 'VERTIV';
+  }
+  return b;
+}
+
+/** Nhãn model đẹp hơn từ key compact (best-effort). */
+export function prettifyEquipmentModel(modelKey, rawModel = '') {
+  const raw = String(rawModel || '').trim();
+  if (raw) {
+    return raw
+      .replace(/\s+/g, ' ')
+      .replace(/\bNETSUARE\b/gi, 'Netsure')
+      .replace(/\bNETSUR\b/gi, 'Netsure');
+  }
+  return String(modelKey || '');
+}
+
 function brandModelParts(typeId, device) {
   const d = device || {};
   const brand = String(
@@ -348,6 +412,15 @@ function brandModelParts(typeId, device) {
   return { brand, model };
 }
 
+/** Hãng/model đã chuẩn (để ghi kinds + hiển thị gom mẫu). */
+export function canonicalBrandModel(typeId, device) {
+  const { brand, model } = brandModelParts(typeId, device);
+  const modelKey = normalizeEquipmentModelKey(model, brand);
+  const brandN = canonicalKindBrand(brand, modelKey);
+  const modelN = modelKey ? prettifyEquipmentModel(modelKey, model) : '';
+  return { brand: brandN, model: modelN, modelKey, rawBrand: brand, rawModel: model };
+}
+
 export function sanitizeEquipmentKindKeyPart(s) {
   return String(s || '')
     .trim()
@@ -357,17 +430,17 @@ export function sanitizeEquipmentKindKeyPart(s) {
     .slice(0, 48);
 }
 
-/** Key RTDB equipmentKinds/{typeId}/{kindKey} — gom theo hãng + model. */
+/** Key RTDB equipmentKinds/{typeId}/{kindKey} — gom theo hãng + model (đã chuẩn hóa). */
 export function equipmentKindKey(typeId, device) {
-  const { brand, model } = brandModelParts(typeId, device);
+  const { brand, modelKey } = canonicalBrandModel(typeId, device);
   const b = sanitizeEquipmentKindKeyPart(brand);
-  const m = sanitizeEquipmentKindKeyPart(model);
+  const m = sanitizeEquipmentKindKeyPart(modelKey);
   if (!b && !m) return null;
   return `${b || 'NA'}__${m || 'NA'}`;
 }
 
 export function equipmentKindLabel(typeId, deviceOrShared) {
-  const { brand, model } = brandModelParts(typeId, deviceOrShared);
+  const { brand, model } = canonicalBrandModel(typeId, deviceOrShared);
   if (brand && model) return `${brand} · ${model}`;
   if (brand) return brand;
   if (model) return model;
@@ -382,7 +455,11 @@ export function buildEquipmentKindRecord(typeId, device, who) {
   if (!kindKey) return null;
   const shared = sharedFieldsFromDevice(typeDef, device);
   if (!countEquipmentDataFields(shared)) return null;
-  const { brand, model } = brandModelParts(typeId, device);
+  const { brand, model } = canonicalBrandModel(typeId, device);
+  // Ghi hãng/model chuẩn vào shared để clone mẫu không tái tạo biến thể.
+  if (brand && shared.hang_san_xuat != null) shared.hang_san_xuat = brand;
+  if (brand && shared.hang_san_xuat_thiet_bi != null) shared.hang_san_xuat_thiet_bi = brand;
+  if (model && shared.model != null) shared.model = model;
   return {
     kindKey,
     record: {
