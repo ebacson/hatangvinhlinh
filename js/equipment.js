@@ -1,5 +1,5 @@
 /** Quản lý thiết bị trạm — root RTDB `equipment/{CSHT_…}` (chủng loại + thông số KT). */
-import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=97';
+import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=98';
 
 const BASE = '/hatangvinhlinh';
 
@@ -81,7 +81,7 @@ const TYPE_IDS = new Set(equipmentTypes().map((t) => t.id));
 export async function loadEquipmentCatalog() {
   if (catalogCache) return catalogCache;
   if (!catalogPromise) {
-    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=97`)
+    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=98`)
       .then((r) => {
         if (!r.ok) throw new Error('Không tải được file thiết bị');
         return r.json();
@@ -301,7 +301,7 @@ export function countEquipmentDataFields(device) {
  * Còn lại = field cố định của loại (hãng/model/thông số chung).
  */
 const UNIQUE_FIELD_RE =
-  /^(serial|serial_.+|ma_thiet_bi_ip|snmp_ip|ip_thiet_bi|the_tai_san_.+|so_gio_da_chay|dinh_muc_nhien_lieu|ngay_.+|han_dung|so_kg_sau_khi_can|dong_tai_hien_huu|dong_tai_dap_ung_hien_tai|dong_tai_tieu_thu_hien_tai_a|dong_tai_thuc_te_.+|dien_ap_thuc_te_.+|tin_hieu_canh_bao_hien_tai|tong_so_module_nan_hien_co|ma_dan_pin_mat_troi|ten_dan_pin_mat_troi)$/i;
+  /^(serial|serial_.+|nam_san_xuat|ma_thiet_bi_ip|snmp_ip|ip_thiet_bi|the_tai_san_.+|so_gio_da_chay|dinh_muc_nhien_lieu|ngay_.+|han_dung|so_kg_sau_khi_can|dong_tai_hien_huu|dong_tai_dap_ung_hien_tai|dong_tai_tieu_thu_hien_tai_a|dong_tai_thuc_te_.+|dien_ap_thuc_te_.+|tin_hieu_canh_bao_hien_tai|tong_so_module_nan_hien_co|ma_dan_pin_mat_troi|ten_dan_pin_mat_troi)$/i;
 
 export function isUniqueEquipmentField(key) {
   return UNIQUE_FIELD_RE.test(String(key || ''));
@@ -329,6 +329,8 @@ const BRAND_ALIASES = {
   POSTEG: 'POSTEF',
   POMAX: 'POSMAX',
   'POS MAX': 'POSMAX',
+  'SAI TE': 'SAITE',
+  SAYTE: 'SAITE',
   // Máy phát điện — lỗi chính tả / biến thể tên
   AKASA: 'AKSA',
   KIBILL: 'KIBII',
@@ -582,6 +584,10 @@ export function canonicalBinhAcquy(device) {
     }
   }
 
+  if (brand === 'SAITE') {
+    brand = 'SAITE';
+  }
+
   return {
     brand,
     model: modelKey ? model : '',
@@ -589,6 +595,60 @@ export function canonicalBinhAcquy(device) {
     rawBrand,
     rawModel,
   };
+}
+
+/**
+ * Serial POSTEF kiểu VLF2025090302106 → năm sản xuất 2025.
+ */
+export function parsePostefAcquyYearFromSerial(serial) {
+  const s = String(serial || '')
+    .trim()
+    .toUpperCase();
+  if (!s) return '';
+  const vlf = s.match(/^VLF(20\d{2})/);
+  if (vlf) return vlf[1];
+  return '';
+}
+
+/**
+ * Điền/ghi đè thông số ắc quy theo mẫu chuẩn:
+ * - POSTEF V-LFP48100 → Lithium, 48V, 100Ah; năm SX từ serial VLF20xx…
+ * - POSMAX PNGB23000 → Pb, 2V, 300Ah
+ * - SAITE → 2V, 300Ah
+ */
+export function applyBinhAcquyInferredFields(device, opts = {}) {
+  const fillEmptyOnly = !!opts.fillEmptyOnly;
+  const d = { ...(device || {}) };
+  const { brand, model, modelKey } = canonicalBinhAcquy(d);
+  if (brand) d.hang_san_xuat = brand;
+  if (model) d.model = model;
+
+  const set = (key, val, { force = !fillEmptyOnly } = {}) => {
+    if (val == null || String(val).trim() === '') return;
+    const cur = String(d[key] ?? '').trim();
+    if (!force && cur) return;
+    d[key] = String(val).trim();
+  };
+
+  if (brand === 'POSTEF' && (model === 'V-LFP48100' || modelKey === 'VLFP48100')) {
+    set('cong_nghe_accu', 'Lithium');
+    set('dien_ap_binh', '48');
+    set('dung_luong_binh', '100');
+  } else if (brand === 'POSMAX' && (model === 'PNGB23000' || modelKey === 'PNGB23000')) {
+    set('cong_nghe_accu', 'Pb');
+    set('dien_ap_binh', '2');
+    set('dung_luong_binh', '300');
+  } else if (brand === 'SAITE') {
+    set('dien_ap_binh', '2');
+    set('dung_luong_binh', '300');
+  }
+
+  if (brand === 'POSTEF') {
+    const year = parsePostefAcquyYearFromSerial(d.serial);
+    if (year) set('nam_san_xuat', year, { force: true });
+  }
+
+  return d;
 }
 
 /** Hãng/model đã chuẩn (để ghi kinds + hiển thị gom mẫu). */
@@ -727,18 +787,15 @@ export function buildEquipmentKindRecord(typeId, device, who) {
       shared.cong_suat_danh_dinh_kva = String(canon.kva);
     }
   } else if (typeId === 'binh_acquy') {
-    if (brand) shared.hang_san_xuat = brand;
-    if (model) shared.model = model;
-    if (brand === 'POSTEF' && model === 'V-LFP48100') {
-      if (!shared.cong_nghe_accu) shared.cong_nghe_accu = 'Lithium';
-      if (!shared.dien_ap_binh) shared.dien_ap_binh = '48';
-      if (!shared.dung_luong_binh) shared.dung_luong_binh = '100';
-    }
-    if (brand === 'POSMAX' && model === 'PNGB23000') {
-      if (!shared.cong_nghe_accu) shared.cong_nghe_accu = 'Pb';
-      if (!shared.dien_ap_binh) shared.dien_ap_binh = '2';
-      if (!shared.dung_luong_binh) shared.dung_luong_binh = '300';
-    }
+    const inferred = applyBinhAcquyInferredFields({ ...device, ...shared, hang_san_xuat: brand || shared.hang_san_xuat, model: model || shared.model });
+    if (inferred.hang_san_xuat) shared.hang_san_xuat = inferred.hang_san_xuat;
+    if (inferred.model) shared.model = inferred.model;
+    if (inferred.cong_nghe_accu) shared.cong_nghe_accu = inferred.cong_nghe_accu;
+    if (inferred.dien_ap_binh) shared.dien_ap_binh = inferred.dien_ap_binh;
+    if (inferred.dung_luong_binh) shared.dung_luong_binh = inferred.dung_luong_binh;
+    // nam_san_xuat / serial là theo từng bình — không ghi vào mẫu loại.
+    delete shared.nam_san_xuat;
+    delete shared.serial;
   } else if (typeId === 'dieu_hoa') {
     if (brand) shared.hang_san_xuat = brand;
     if (canon.btu != null) shared.cong_suat_lanh_btu = String(canon.btu);

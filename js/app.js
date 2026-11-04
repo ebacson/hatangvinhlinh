@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=97';
+} from './config.js?v=98';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=97';
+} from './forecast.js?v=98';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=97';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=97';
+} from './stats.js?v=98';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=98';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -63,9 +63,10 @@ import {
   buildEquipmentKindRecord,
   equipmentKindKey,
   equipmentKindLabel,
+  applyBinhAcquyInferredFields,
   isUniqueEquipmentField,
-} from './equipment.js?v=97';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=97';
+} from './equipment.js?v=98';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=98';
 
 
 const app = initializeApp(firebaseConfig);
@@ -2421,7 +2422,10 @@ function captureEquipmentFormIntoDraft() {
   // Tránh ghi đè nhầm khi DOM form chưa khớp thiết bị đang chọn (sau Thêm / đổi #).
   const expected = `${equipmentDraft.maCsht}|${equipmentDraft.typeId}|${equipmentDraft.index}`;
   if (root.dataset.stamp && root.dataset.stamp !== expected) return;
-  const vals = readEquipmentFormValues(typeDef, root);
+  let vals = readEquipmentFormValues(typeDef, root);
+  if (equipmentDraft.typeId === 'binh_acquy') {
+    vals = applyBinhAcquyInferredFields(vals);
+  }
   const list = equipmentDraft.byType[equipmentDraft.typeId] || [];
   while (list.length <= equipmentDraft.index) list.push({});
   // Không thay bản nháp đã có bằng object rỗng (mất thiết bị cũ).
@@ -2636,11 +2640,12 @@ function applyKindTemplateToCurrentDevice(kindKey) {
     return;
   }
   const shared = sharedFieldsFromDevice(typeDef, kind);
-  const next = { ...current };
+  let next = { ...current };
   for (const f of typeDef.fields) {
     if (isUniqueEquipmentField(f.key)) continue;
     if (shared[f.key] != null) next[f.key] = shared[f.key];
   }
+  if (typeId === 'binh_acquy') next = applyBinhAcquyInferredFields(next);
   list[idx] = next;
   equipmentDraft.byType[typeId] = list;
   renderEquipmentEditor(equipmentDraft.maCsht, true);
@@ -2755,7 +2760,8 @@ async function saveEquipment() {
   const who = currentUserLabel();
   const nowMs = Date.now();
   const devices = (equipmentDraft.byType[typeId] || [])
-    .map((d) => {
+    .map((raw) => {
+      const d = typeId === 'binh_acquy' ? applyBinhAcquyInferredFields(raw) : raw;
       const clean = {};
       for (const f of typeDef.fields) {
         if (d[f.key] != null && String(d[f.key]).trim() !== '') clean[f.key] = String(d[f.key]).trim();
@@ -3050,6 +3056,23 @@ function bindEvents() {
       }
     } finally {
       btn.disabled = false;
+    }
+  });
+  $('#eq-fields')?.addEventListener('input', (e) => {
+    if (!equipmentDraft || equipmentDraft.typeId !== 'binh_acquy') return;
+    const key = e.target?.getAttribute?.('data-eq-key');
+    if (!key || !['serial', 'hang_san_xuat', 'model'].includes(key)) return;
+    const typeDef = equipmentTypeById('binh_acquy');
+    const root = $('#eq-fields');
+    if (!typeDef || !root) return;
+    const vals = applyBinhAcquyInferredFields(readEquipmentFormValues(typeDef, root));
+    for (const f of typeDef.fields) {
+      if (!['cong_nghe_accu', 'dien_ap_binh', 'dung_luong_binh', 'nam_san_xuat', 'hang_san_xuat', 'model'].includes(f.key)) {
+        continue;
+      }
+      const el = root.querySelector(`[data-eq-key="${CSS.escape(f.key)}"]`);
+      if (!el || vals[f.key] == null) continue;
+      if (el.value !== String(vals[f.key])) el.value = String(vals[f.key]);
     }
   });
   $('#detail-delete-station')?.addEventListener('click', () => {
