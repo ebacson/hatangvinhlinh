@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=100';
+} from './config.js?v=101';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=100';
+} from './forecast.js?v=101';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=100';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=100';
+} from './stats.js?v=101';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=101';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -66,8 +66,8 @@ import {
   applyBinhAcquyInferredFields,
   applyPostefAcquyYearFromSerial,
   isUniqueEquipmentField,
-} from './equipment.js?v=100';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=100';
+} from './equipment.js?v=101';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=101';
 
 
 const app = initializeApp(firebaseConfig);
@@ -102,6 +102,9 @@ const state = {
   stations: [],
   query: '',
   equipmentQuery: '',
+  /** Vị trí GPS hiện tại: { lat, lng, accuracy, at } | null */
+  geo: null,
+  geoLocating: false,
   /** Map maCsht → true khi đang xem chi tiết */
   equipmentExpanded: {},
   /** CSHT đang mở sheet thiết bị */
@@ -879,10 +882,129 @@ function fuelLevelClass(predicted) {
   return 'fuel-ok';
 }
 
+/** Ngưỡng coi như đang ở trạm (mét). */
+const GEO_NEAR_M = 150;
+
+function haversineMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+function stationCoords(station) {
+  const csht = String(station?.profile?.maCsht || '').trim();
+  if (!csht) return null;
+  const site = state.equipmentByCsht?.[csht];
+  if (!site) return null;
+  const lat = toNum(site.lat);
+  const lng = toNum(site.long);
+  if (lat == null || lng == null) return null;
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  return { lat, lng };
+}
+
+function formatDistanceMeters(m) {
+  if (m == null || !Number.isFinite(m)) return '—';
+  if (m < 1000) return `${Math.round(m)} m`;
+  const km = m / 1000;
+  return `${km < 10 ? km.toFixed(1) : Math.round(km)} km`;
+}
+
+function stationDistanceMeters(station) {
+  const geo = state.geo;
+  if (!geo || geo.lat == null || geo.lng == null) return null;
+  const c = stationCoords(station);
+  if (!c) return null;
+  return haversineMeters(geo.lat, geo.lng, c.lat, c.lng);
+}
+
+function sortStationsByDistance(list) {
+  if (!state.geo) return list;
+  return [...list].sort((a, b) => {
+    const da = stationDistanceMeters(a);
+    const db = stationDistanceMeters(b);
+    if (da == null && db == null) {
+      return (a.profile.maTram || a.stationKey).localeCompare(
+        b.profile.maTram || b.stationKey,
+        'vi'
+      );
+    }
+    if (da == null) return 1;
+    if (db == null) return -1;
+    return da - db;
+  });
+}
+
+function updateStationsGeoButton() {
+  const btn = $('#stations-geo-btn');
+  if (!btn) return;
+  btn.disabled = !!state.geoLocating;
+  if (state.geoLocating) {
+    btn.textContent = 'Đang lấy GPS…';
+    btn.classList.add('is-active');
+    return;
+  }
+  if (state.geo) {
+    const acc =
+      state.geo.accuracy != null && Number.isFinite(state.geo.accuracy)
+        ? ` ±${Math.round(state.geo.accuracy)} m`
+        : '';
+    btn.textContent = `Làm mới vị trí${acc}`;
+    btn.classList.add('is-active');
+    return;
+  }
+  btn.textContent = 'Gần tôi';
+  btn.classList.remove('is-active');
+}
+
+function requestStationsGeo() {
+  if (!navigator.geolocation) {
+    toast('Thiết bị không hỗ trợ GPS');
+    return;
+  }
+  if (state.geoLocating) return;
+  state.geoLocating = true;
+  updateStationsGeoButton();
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      state.geoLocating = false;
+      state.geo = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        accuracy: pos.coords.accuracy,
+        at: Date.now(),
+      };
+      updateStationsGeoButton();
+      renderStations();
+      toast('Đã lấy vị trí — sắp xếp trạm theo khoảng cách');
+    },
+    (err) => {
+      state.geoLocating = false;
+      updateStationsGeoButton();
+      const code = err && err.code;
+      const msg =
+        code === 1
+          ? 'Chưa cấp quyền vị trí — hãy cho phép trong trình duyệt/OS'
+          : code === 2
+            ? 'Không xác định được vị trí'
+            : code === 3
+              ? 'Hết thời gian lấy GPS'
+              : 'Không lấy được GPS';
+      toast(msg);
+    },
+    { enableHighAccuracy: true, timeout: 20000, maximumAge: 30000 }
+  );
+}
+
 function renderStationsSummary(list) {
   const el = $('#stations-summary');
   if (!el) return;
-  if (!list.length && !state.query.trim()) {
+  if (!list.length && !state.query.trim() && !state.geo) {
     el.hidden = true;
     el.innerHTML = '';
     return;
@@ -893,17 +1015,30 @@ function renderStationsSummary(list) {
     return p != null && p < 30;
   }).length;
   el.hidden = false;
+  const near =
+    state.geo != null
+      ? list.filter((s) => {
+          const d = stationDistanceMeters(s);
+          return d != null && d <= GEO_NEAR_M;
+        }).length
+      : null;
   el.innerHTML = `
     <div class="stat-pill"><span class="stat-n">${list.length}</span><span class="stat-l">trạm</span></div>
     <div class="stat-pill ${sc ? 'is-warn' : ''}"><span class="stat-n">${sc}</span><span class="stat-l">đang SC</span></div>
     <div class="stat-pill ${low ? 'is-fuel' : ''}"><span class="stat-n">${low}</span><span class="stat-l">NL thấp</span></div>
+    ${
+      near != null
+        ? `<div class="stat-pill ${near ? 'is-near' : ''}"><span class="stat-n">${near}</span><span class="stat-l">≤${GEO_NEAR_M} m</span></div>`
+        : ''
+    }
   `;
 }
 
 function renderStations() {
-  const list = filteredStations();
+  const list = sortStationsByDistance(filteredStations());
   const root = $('#stations-list');
   const empty = $('#stations-empty');
+  updateStationsGeoButton();
   renderStationsSummary(list);
 
   if (!list.length) {
@@ -927,6 +1062,15 @@ function renderStations() {
       const maKhoa = (s.profile.maKhoaTram || '').trim();
       const generator = (s.profile.generatorName || '').trim();
       const addr = s.profile.diaChi || 'Chưa có địa chỉ';
+      const distM = state.geo ? stationDistanceMeters(s) : null;
+      const distNear = distM != null && distM <= GEO_NEAR_M;
+      const distHtml = !state.geo
+        ? ''
+        : distM != null
+          ? `<p class="station-dist${distNear ? ' is-near' : ''}">${
+              distNear ? 'Gần vị trí · ' : ''
+            }${escapeHtml(formatDistanceMeters(distM))}</p>`
+          : `<p class="station-dist is-missing">Chưa có tọa độ CSHT</p>`;
       const predicted = stationForecast(s);
       const fuelClass = fuelLevelClass(predicted);
       const fuelLabel = predicted == null ? '--' : formatPercent(predicted);
@@ -975,6 +1119,7 @@ function renderStations() {
         </header>
         <p class="station-name">${escapeHtml(name)}</p>
         <p class="station-addr">${escapeHtml(addr)}</p>
+        ${distHtml}
 
         <div class="station-kv">
           <div class="station-kv-row">
@@ -1575,7 +1720,16 @@ function renderDetail() {
     badge.classList.toggle('is-station', isStation);
   }
   $('#detail-title').textContent = s.profile.maTram || s.stationKey;
-  $('#detail-subtitle').textContent = s.profile.tenTram || '—';
+  {
+    const base = s.profile.tenTram || '—';
+    const distM = state.geo ? stationDistanceMeters(s) : null;
+    $('#detail-subtitle').textContent =
+      distM != null
+        ? `${base} · ${formatDistanceMeters(distM)}${
+            distM <= GEO_NEAR_M ? ' (gần vị trí)' : ''
+          }`
+        : base;
+  }
 
   if (isEdit) {
     if (!sheet.dataset.bound || sheet.dataset.key !== s.stationKey || sheet.dataset.mode !== 'edit') {
@@ -2843,6 +2997,9 @@ function bindEvents() {
   $('#station-search').addEventListener('input', (e) => {
     state.query = e.target.value;
     renderStations();
+  });
+  $('#stations-geo-btn')?.addEventListener('click', () => {
+    requestStationsGeo();
   });
   $('#equipment-search')?.addEventListener('input', (e) => {
     state.equipmentQuery = e.target.value;
