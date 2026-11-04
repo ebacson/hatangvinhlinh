@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=103';
+} from './config.js?v=104';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=103';
+} from './forecast.js?v=104';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=103';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=103';
+} from './stats.js?v=104';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=104';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -66,8 +66,8 @@ import {
   applyBinhAcquyInferredFields,
   applyPostefAcquyYearFromSerial,
   isUniqueEquipmentField,
-} from './equipment.js?v=103';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=103';
+} from './equipment.js?v=104';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=104';
 
 
 const app = initializeApp(firebaseConfig);
@@ -926,18 +926,20 @@ function isEquipmentNearestFilter() {
   return state.equipmentGeoFilter === 'nearest' && !!state.geo;
 }
 
-function sortEquipmentSitesByDistance(list) {
+/** Gần nhất: chỉ giữ 1 CSHT gần GPS nhất (có tọa độ). */
+function applyEquipmentNearestFilter(list) {
   if (!isEquipmentNearestFilter()) return list;
-  return [...list].sort((a, b) => {
-    const da = siteDistanceMeters(a);
-    const db = siteDistanceMeters(b);
-    if (da == null && db == null) {
-      return (a.maTram || a.maCsht).localeCompare(b.maTram || b.maCsht, 'vi');
+  let best = null;
+  let bestDist = Infinity;
+  for (const row of list) {
+    const d = siteDistanceMeters(row);
+    if (d == null) continue;
+    if (d < bestDist) {
+      bestDist = d;
+      best = row;
     }
-    if (da == null) return 1;
-    if (db == null) return -1;
-    return da - db;
-  });
+  }
+  return best ? [best] : [];
 }
 
 function syncEquipmentGeoFilterControl() {
@@ -2283,7 +2285,7 @@ function filteredEquipmentSites() {
         const hay = `${r.maCsht} ${r.maTram} ${r.maTrams.join(' ')} ${r.tenTram}`.toLowerCase();
         return hay.includes(q);
       });
-  return sortEquipmentSitesByDistance(matched);
+  return applyEquipmentNearestFilter(matched);
 }
 
 function exportEquipmentExcel() {
@@ -2362,11 +2364,11 @@ function renderEquipmentList() {
     if (state.geoLocating && state.equipmentGeoFilter === 'nearest') {
       summary.textContent = 'Đang lấy GPS…';
     } else if (isEquipmentNearestFilter()) {
-      const near = list.filter((r) => {
-        const d = siteDistanceMeters(r);
-        return d != null && d <= GEO_NEAR_M;
-      }).length;
-      summary.textContent = `${list.length} CSHT · gần nhất · ${near} ≤${GEO_NEAR_M} m`;
+      const d = list[0] ? siteDistanceMeters(list[0]) : null;
+      summary.textContent =
+        list.length && d != null
+          ? `Gần nhất · ${formatDistanceMeters(d)}${d <= GEO_NEAR_M ? ' · đúng vị trí' : ''}`
+          : 'Không có CSHT có tọa độ gần bạn';
     } else {
       summary.textContent = `${list.length} CSHT`;
     }
@@ -2376,7 +2378,9 @@ function renderEquipmentList() {
     empty.hidden = false;
     empty.innerHTML = state.equipmentQuery.trim()
       ? `<p class="empty-title">Không tìm thấy CSHT</p><p class="empty-desc">Thử mã hoặc tên khác.</p>`
-      : `<p class="empty-title">Chưa có dữ liệu thiết bị</p>`;
+      : state.equipmentGeoFilter === 'nearest'
+        ? `<p class="empty-title">Không có CSHT gần bạn</p><p class="empty-desc">Cần tọa độ LAT/LONG trên CSHT, hoặc chọn Tất cả.</p>`
+        : `<p class="empty-title">Chưa có dữ liệu thiết bị</p>`;
     return;
   }
   empty.hidden = true;
