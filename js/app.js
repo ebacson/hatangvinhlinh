@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=93';
+} from './config.js?v=94';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=93';
+} from './forecast.js?v=94';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=93';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=93';
+} from './stats.js?v=94';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=94';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -63,8 +63,8 @@ import {
   buildEquipmentKindRecord,
   equipmentKindKey,
   isUniqueEquipmentField,
-} from './equipment.js?v=93';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=93';
+} from './equipment.js?v=94';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=94';
 
 
 const app = initializeApp(firebaseConfig);
@@ -930,12 +930,18 @@ function renderStations() {
       const fuelClass = fuelLevelClass(predicted);
       const fuelLabel = predicted == null ? '--' : formatPercent(predicted);
       const since = formatMinutes(s.stats.runMinutesSinceRefuel);
-      const total = formatMinutes(s.stats.totalRunMinutes);
-      const lastMin = s.stats.lastRunMinutes;
-      const last =
-        lastMin == null
-          ? '--'
-          : `${formatMinutes(lastMin)}${s.stats.lastKpAt ? ` · ${formatMillis(s.stats.lastKpAt)}` : ''}`;
+      // Gần nhất / Tổng: chỉ từ KP MAY_NO (cùng nguồn với Chi tiết lịch sử).
+      // Không dùng stats.lastRunMinutes — backend có thể lẫn KP nguồn điện (POWER_AC).
+      const mayNoRuns = [...(s.runs || [])].sort((a, b) => (b.at || 0) - (a.at || 0));
+      const lastRun = mayNoRuns[0] || null;
+      const totalFromRuns = mayNoRuns.reduce((sum, r) => sum + (Number(r.minutes) || 0), 0);
+      const total =
+        mayNoRuns.length > 0
+          ? formatMinutes(totalFromRuns)
+          : formatMinutes(s.stats.totalRunMinutes);
+      const last = lastRun
+        ? `${formatMinutes(lastRun.minutes)}${lastRun.at ? ` · ${formatMillis(lastRun.at)}` : ''}`
+        : '--';
       const genLabel = generator || 'chưa đặt tên';
       const active = s.mayNoLastAlertType === 'SC';
       const historyBtn = canManageRunHistory()
@@ -1291,6 +1297,19 @@ function renderUserModeration() {
     .join('');
 }
 
+function countMayNoScEvents(eventsMap) {
+  let n = 0;
+  for (const ev of Object.values(eventsMap || {})) {
+    if (!ev || typeof ev !== 'object') continue;
+    if (!String(ev.deviceType || '')
+      .toUpperCase()
+      .includes('MAY_NO'))
+      continue;
+    if (String(ev.type || '').toUpperCase() === 'SC') n += 1;
+  }
+  return n;
+}
+
 function buildRunHistory(eventsMap, station) {
   const rows = extractMayNoRuns(eventsMap).map((r) => ({
     id: r.id,
@@ -1331,7 +1350,10 @@ function renderRunHistory() {
     return;
   }
   if (!state.runHistory.length) {
-    el.innerHTML = `<p class="muted run-history-empty">Chưa có lần chạy nào được ghi.</p>`;
+    const scN = countMayNoScEvents(cachedRunEvents);
+    el.innerHTML = scN
+      ? `<p class="muted run-history-empty">Chưa có lần chạy hoàn tất (KP máy nổ).<br/>Đã nhận ${scN} tin SC máy nổ nhưng chưa có KP kết thúc tương ứng.</p>`
+      : `<p class="muted run-history-empty">Chưa có lần chạy máy nổ nào được ghi (KP MAY_NO).</p>`;
     return;
   }
   const canManage = canManageRunHistory();
