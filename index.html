@@ -18,7 +18,7 @@
       href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700&family=Sora:wght@600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="css/app.css?v=79" />
+    <link rel="stylesheet" href="css/app.css?v=80" />
   </head>
   <body>
     <div id="boot-screen" class="boot-screen" role="status" aria-live="polite">
@@ -452,6 +452,13 @@
                 <label for="eq-device-index" id="eq-device-index-label">Thiết bị #</label>
                 <select id="eq-device-index"></select>
               </div>
+              <div class="field field-span">
+                <label for="eq-kind-from">Theo loại có sẵn (hãng · model)</label>
+                <select id="eq-kind-from">
+                  <option value="">— Nhập mới / không dùng mẫu —</option>
+                </select>
+                <p class="muted tiny">Chọn loại → điền thông số cố định. Serial / IP / thẻ tài sản… nhập mới.</p>
+              </div>
               <div class="field field-span eq-toolbar">
                 <button type="button" class="btn-text" id="eq-add-device">+ Thêm thiết bị</button>
                 <button type="button" class="btn-text danger" id="eq-delete-device">Xóa thiết bị này</button>
@@ -542,6 +549,6 @@
       <button type="button" id="update-reload" class="btn update-banner-btn">Cập nhật ngay</button>
     </div>
 
-    <script type="module" src="js/app.js?v=79"></script>
+    <script type="module" src="js/app.js?v=80"></script>
   </body>
 </html>

@@ -1,5 +1,5 @@
 /** Quản lý thiết bị trạm — root RTDB `equipment/{CSHT_…}` (chủng loại + thông số KT). */
-import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=79';
+import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=80';
 
 const BASE = '/hatangvinhlinh';
 
@@ -69,7 +69,7 @@ const TYPE_IDS = new Set(equipmentTypes().map((t) => t.id));
 export async function loadEquipmentCatalog() {
   if (catalogCache) return catalogCache;
   if (!catalogPromise) {
-    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=79`)
+    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=80`)
       .then((r) => {
         if (!r.ok) throw new Error('Không tải được file thiết bị');
         return r.json();
@@ -166,13 +166,17 @@ export function buildEquipmentFieldsHtml(typeDef, values) {
         <h3 class="sheet-block-title">${escapeHtml(title)}</h3>
         <div class="field-grid">
           ${fields
-            .map(
-              (f) => `
-            <div class="field field-span">
-              <label for="eq-f-${escapeAttr(f.key)}">${escapeHtml(f.label)}</label>
+            .map((f) => {
+              const unique = isUniqueEquipmentField(f.key);
+              const hint = unique
+                ? `<span class="eq-field-tag">Nhập mới</span>`
+                : `<span class="eq-field-tag is-shared">Theo loại</span>`;
+              return `
+            <div class="field field-span ${unique ? 'eq-field-unique' : 'eq-field-shared'}">
+              <label for="eq-f-${escapeAttr(f.key)}">${escapeHtml(f.label)} ${hint}</label>
               ${inputFor(f)}
-            </div>`
-            )
+            </div>`;
+            })
             .join('')}
         </div>
       </section>`;
@@ -271,13 +275,103 @@ export function countEquipmentDataFields(device) {
   ).length;
 }
 
-function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+/**
+ * Field theo từng máy (nhập mới khi clone từ loại có sẵn).
+ * Còn lại = field cố định của loại (hãng/model/thông số chung).
+ */
+const UNIQUE_FIELD_RE =
+  /^(serial|serial_.+|ma_thiet_bi_ip|snmp_ip|ip_thiet_bi|the_tai_san_.+|so_gio_da_chay|ngay_.+|han_dung|so_kg_sau_khi_can|dong_tai_hien_huu|dong_tai_dap_ung_hien_tai|dong_tai_tieu_thu_hien_tai_a|dong_tai_thuc_te_.+|dien_ap_thuc_te_.+|tin_hieu_canh_bao_hien_tai|tong_so_module_nan_hien_co|ma_dan_pin_mat_troi|ten_dan_pin_mat_troi)$/i;
+
+export function isUniqueEquipmentField(key) {
+  return UNIQUE_FIELD_RE.test(String(key || ''));
 }
-function escapeAttr(s) {
-  return escapeHtml(s).replace(/'/g, '&#39;');
+
+export function isSharedEquipmentField(key) {
+  if (!key || String(key).startsWith('lastEdited')) return false;
+  return !isUniqueEquipmentField(key);
+}
+
+/** Lấy chỉ thông số cố định từ device. */
+export function sharedFieldsFromDevice(typeDef, device) {
+  const out = {};
+  if (!typeDef || !device) return out;
+  for (const f of typeDef.fields) {
+    if (!isSharedEquipmentField(f.key)) continue;
+    const v = device[f.key];
+    if (v == null || String(v).trim() === '') continue;
+    out[f.key] = String(v).trim();
+  }
+  return out;
+}
+
+function brandModelParts(typeId, device) {
+  const d = device || {};
+  const brand = String(
+    d.hang_san_xuat ||
+      d.hang_san_xuat_thiet_bi ||
+      d.nha_san_xuat ||
+      d.hang_san_xuat_inventer ||
+      d.hang_san_xuat_pin ||
+      ''
+  ).trim();
+  let model = String(d.model || '').trim();
+  if (!model && typeId === 'binh_chua_chay') {
+    model = String(d.loai_binh_chua_chay || '').trim();
+  }
+  if (!model && typeId === 'tu_pp_ac') {
+    model = String(d.tri_so_mcb_tong || '').trim();
+  }
+  if (!model && typeId === 'he_thong_pin_mat_troi') {
+    model = [d.mo_hinh_he_thong_solar, d.cong_suat_he_thong_solar_kwp].filter(Boolean).join(' ');
+  }
+  return { brand, model };
+}
+
+export function sanitizeEquipmentKindKeyPart(s) {
+  return String(s || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 48);
+}
+
+/** Key RTDB equipmentKinds/{typeId}/{kindKey} — gom theo hãng + model. */
+export function equipmentKindKey(typeId, device) {
+  const { brand, model } = brandModelParts(typeId, device);
+  const b = sanitizeEquipmentKindKeyPart(brand);
+  const m = sanitizeEquipmentKindKeyPart(model);
+  if (!b && !m) return null;
+  return `${b || 'NA'}__${m || 'NA'}`;
+}
+
+export function equipmentKindLabel(typeId, deviceOrShared) {
+  const { brand, model } = brandModelParts(typeId, deviceOrShared);
+  if (brand && model) return `${brand} · ${model}`;
+  if (brand) return brand;
+  if (model) return model;
+  return 'Loại thiết bị';
+}
+
+/** Payload ghi vào equipmentKinds/{typeId}/{kindKey}. */
+export function buildEquipmentKindRecord(typeId, device, who) {
+  const typeDef = equipmentTypeById(typeId);
+  if (!typeDef) return null;
+  const kindKey = equipmentKindKey(typeId, device);
+  if (!kindKey) return null;
+  const shared = sharedFieldsFromDevice(typeDef, device);
+  if (!countEquipmentDataFields(shared)) return null;
+  const { brand, model } = brandModelParts(typeId, device);
+  return {
+    kindKey,
+    record: {
+      ...shared,
+      brand: brand || null,
+      model: model || null,
+      label: equipmentKindLabel(typeId, device),
+      typeId,
+      lastEditedBy: who || null,
+      lastEditedAt: Date.now(),
+    },
+  };
 }

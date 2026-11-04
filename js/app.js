@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=79';
+} from './config.js?v=80';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=79';
+} from './forecast.js?v=80';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=79';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=79';
+} from './stats.js?v=80';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=80';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -59,8 +59,11 @@ import {
   mapStationMayNoToMayPhatDien,
   mergeEquipmentDeviceFillEmpty,
   countEquipmentDataFields,
-} from './equipment.js?v=79';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=79';
+  sharedFieldsFromDevice,
+  buildEquipmentKindRecord,
+  isUniqueEquipmentField,
+} from './equipment.js?v=80';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=80';
 
 
 const app = initializeApp(firebaseConfig);
@@ -81,6 +84,8 @@ const stationsRef = ref(db, 'stations');
 
 const state = {
   equipmentByCsht: {},
+  /** RTDB equipmentKinds/{typeId}/{kindKey} — loại TB toàn hệ thống (hãng+model). */
+  equipmentKinds: {},
   user: null,
   /** false đến khi Firebase báo auth state lần đầu */
   authReady: false,
@@ -2416,6 +2421,7 @@ function renderEquipmentEditor(csht, forceFields = false) {
       .join('');
     idxSel.value = String(equipmentDraft.index);
   }
+  fillKindSelect(equipmentDraft.typeId);
   const typeDef = equipmentTypeById(equipmentDraft.typeId);
   const fields = $('#eq-fields');
   const stamp = `${equipmentDraft.maCsht}|${equipmentDraft.typeId}|${equipmentDraft.index}`;
@@ -2440,6 +2446,87 @@ function onEquipmentIndexChange() {
   renderEquipmentEditor(equipmentDraft.maCsht, true);
 }
 
+function kindsForType(typeId) {
+  const fromRtdb = state.equipmentKinds?.[typeId];
+  const map = {};
+  if (fromRtdb && typeof fromRtdb === 'object') {
+    for (const [k, rec] of Object.entries(fromRtdb)) {
+      if (rec && typeof rec === 'object') map[k] = { ...rec, kindKey: k };
+    }
+  }
+  // Bổ sung từ equipment hiện có (chưa kịp ghi kinds)
+  for (const site of Object.values(state.equipmentByCsht || {})) {
+    const devices = normalizeEquipment(site)[typeId] || [];
+    for (const d of devices) {
+      const built = buildEquipmentKindRecord(typeId, d, null);
+      if (!built) continue;
+      if (!map[built.kindKey]) map[built.kindKey] = { ...built.record, kindKey: built.kindKey };
+    }
+  }
+  return Object.values(map).sort((a, b) =>
+    String(a.label || '').localeCompare(String(b.label || ''), 'vi')
+  );
+}
+
+function fillKindSelect(typeId) {
+  const sel = $('#eq-kind-from');
+  if (!sel) return;
+  const kinds = kindsForType(typeId);
+  const cur = sel.value || '';
+  sel.innerHTML =
+    `<option value="">— Nhập mới / không dùng mẫu —</option>` +
+    kinds
+      .map(
+        (k) =>
+          `<option value="${escapeAttr(k.kindKey)}">${escapeHtml(k.label || k.kindKey)}</option>`
+      )
+      .join('');
+  if (cur && [...sel.options].some((o) => o.value === cur)) sel.value = cur;
+  else sel.value = '';
+}
+
+function applyKindTemplateToCurrentDevice(kindKey) {
+  if (!equipmentDraft) return;
+  const typeId = equipmentDraft.typeId;
+  const typeDef = equipmentTypeById(typeId);
+  if (!typeDef) return;
+  const list = equipmentDraft.byType[typeId] || [];
+  const idx = equipmentDraft.index;
+  while (list.length <= idx) list.push({});
+  const current = { ...(list[idx] || {}) };
+
+  if (!kindKey) {
+    // Giữ field unique đã nhập; xóa field shared để nhập lại
+    for (const f of typeDef.fields) {
+      if (isUniqueEquipmentField(f.key)) continue;
+      delete current[f.key];
+    }
+    list[idx] = current;
+    equipmentDraft.byType[typeId] = list;
+    renderEquipmentEditor(equipmentDraft.maCsht, true);
+    return;
+  }
+
+  const kinds = kindsForType(typeId);
+  const kind = kinds.find((k) => k.kindKey === kindKey);
+  if (!kind) {
+    toast('Không tìm thấy loại thiết bị');
+    return;
+  }
+  const shared = sharedFieldsFromDevice(typeDef, kind);
+  // Unique giữ nguyên nếu đã có; shared lấy từ mẫu
+  const next = { ...current };
+  for (const f of typeDef.fields) {
+    if (isUniqueEquipmentField(f.key)) continue;
+    if (shared[f.key] != null) next[f.key] = shared[f.key];
+    else delete next[f.key];
+  }
+  list[idx] = next;
+  equipmentDraft.byType[typeId] = list;
+  renderEquipmentEditor(equipmentDraft.maCsht, true);
+  toast(`Đã áp dụng loại: ${kind.label || kindKey}`);
+}
+
 function addEquipmentDevice() {
   captureEquipmentFormIntoDraft();
   if (!equipmentDraft) return;
@@ -2447,7 +2534,21 @@ function addEquipmentDevice() {
   list.push({});
   equipmentDraft.byType[equipmentDraft.typeId] = list;
   equipmentDraft.index = list.length - 1;
+  const kindSel = $('#eq-kind-from');
+  if (kindSel) kindSel.value = '';
   renderEquipmentEditor(equipmentDraft.maCsht, true);
+}
+
+async function upsertEquipmentKindsFromDevices(typeId, devices, who) {
+  if (!typeId || !Array.isArray(devices) || !devices.length) return;
+  const updates = {};
+  for (const d of devices) {
+    const built = buildEquipmentKindRecord(typeId, d, who);
+    if (!built) continue;
+    updates[`${typeId}/${built.kindKey}`] = built.record;
+  }
+  if (!Object.keys(updates).length) return;
+  await update(ref(db, 'equipmentKinds'), updates);
 }
 
 function deleteEquipmentDeviceFromDraft() {
@@ -2554,6 +2655,8 @@ async function saveEquipment() {
         source: payload.source,
       },
     });
+    // Cập nhật danh mục loại TB toàn hệ thống (hãng+model → thông số cố định)
+    upsertEquipmentKindsFromDevices(typeId, devices, who).catch(() => {});
     const sheet = $('#detail-sheet');
     if (sheet) sheet.dataset.bound = '';
     equipmentDraft = null;
@@ -2773,6 +2876,10 @@ function bindEvents() {
   $('#detail-save-equipment')?.addEventListener('click', saveEquipment);
   $('#eq-type')?.addEventListener('change', onEquipmentTypeChange);
   $('#eq-device-index')?.addEventListener('change', onEquipmentIndexChange);
+  $('#eq-kind-from')?.addEventListener('change', (e) => {
+    captureEquipmentFormIntoDraft();
+    applyKindTemplateToCurrentDevice(e.target.value || '');
+  });
   $('#eq-add-device')?.addEventListener('click', addEquipmentDevice);
   $('#eq-delete-device')?.addEventListener('click', deleteEquipmentDeviceFromDraft);
   $('#eq-fields')?.addEventListener('click', async (e) => {
@@ -2834,6 +2941,14 @@ function bindStationsListener() {
   onValue(ref(db, 'equipment'), (snap) => {
     if (!state.user) return;
     state.equipmentByCsht = snap.val() || {};
+    render();
+  });
+  onValue(ref(db, 'equipmentKinds'), (snap) => {
+    if (!state.user) return;
+    state.equipmentKinds = snap.val() || {};
+    if (state.sheetMode === 'equipment' && equipmentDraft) {
+      fillKindSelect(equipmentDraft.typeId);
+    }
     render();
   });
 }

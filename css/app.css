@@ -1367,6 +1367,29 @@ main {
   align-items: center;
 }
 
+.eq-field-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+  background: #e8f1ff;
+  color: #1d4f91;
+}
+
+.eq-field-tag.is-shared {
+  background: #eef2f6;
+  color: #5a6f84;
+}
+
+.eq-field-unique input {
+  border-color: #9ec0ea;
+  background: #f7fbff;
+}
+
 .eq-toolbar .btn-outline,
 .eq-toolbar .btn-text {
   min-height: 36px;
