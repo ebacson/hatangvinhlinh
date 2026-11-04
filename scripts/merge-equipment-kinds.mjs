@@ -24,7 +24,17 @@ const SITE_META = new Set([
   'updatedAt',
 ]);
 
-const BRAND_ALIASES = { POSTEG: 'POSTEF', POMAX: 'POSMAX', 'POS MAX': 'POSMAX' };
+const BRAND_ALIASES = {
+  POSTEG: 'POSTEF',
+  POMAX: 'POSMAX',
+  'POS MAX': 'POSMAX',
+  AKASA: 'AKSA',
+  KIBILL: 'KIBII',
+  KILBILL: 'KIBII',
+  KOBUTA: 'KUBOTA',
+  HUUTOAN: 'HUU TOAN',
+  'KYO POWER': 'KYO',
+};
 
 function isShared(key) {
   return key && !String(key).startsWith('lastEdited') && !UNIQUE_FIELD_RE.test(key);
@@ -76,7 +86,54 @@ function canonBrand(brand, modelKey = '') {
   return b;
 }
 
+function parseKva(...parts) {
+  for (const raw of parts) {
+    const s = String(raw || '').trim();
+    if (!s) continue;
+    const withUnit = s.match(/(\d+(?:[.,]\d+)?)\s*K\.?\s*V\.?\s*A/i);
+    if (withUnit) return Number(String(withUnit[1]).replace(',', '.'));
+    if (/^\d+(?:[.,]\d+)?$/.test(s)) {
+      const n = Number(s.replace(',', '.'));
+      if (Number.isFinite(n) && n > 0 && n < 10000) return n;
+    }
+  }
+  return null;
+}
+
+function stripBrandCapacity(brand) {
+  return String(brand || '')
+    .trim()
+    .replace(/\s*\d+(?:[.,]\d+)?\s*K\.?\s*V\.?\s*A\s*$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function canonMayPhatDien(d) {
+  const rawBrand = String(d.hang_san_xuat || d.nha_san_xuat || '').trim();
+  const rawModel = String(d.model || '').trim();
+  const modelUseful = rawModel && !/^no$/i.test(rawModel) ? rawModel : '';
+  const kva = parseKva(rawBrand, modelUseful, d.cong_suat_danh_dinh_kva, d.cong_suat_kva);
+  let brand = normBrand(stripBrandCapacity(rawBrand).toUpperCase());
+  if (!brand || brand === 'NO') brand = '';
+  if (brand === 'HONDA EKBI') brand = 'HONDA';
+  let modelKey = '';
+  let model = '';
+  if (brand === 'BRUNO') {
+    const bucket = kva != null && kva <= 15 ? '10KVA' : '20KVA';
+    modelKey = bucket;
+    model = bucket;
+  } else if (modelUseful) {
+    modelKey = normModelKey(modelUseful, brand);
+    model = modelUseful.replace(/\s+/g, ' ');
+  }
+  return { brand, model, modelKey, kva, rawBrand, rawModel };
+}
+
 function brandModel(typeId, d) {
+  if (typeId === 'may_phat_dien') {
+    const mpd = canonMayPhatDien(d);
+    return { brand: mpd.rawBrand, model: mpd.rawModel, mpd };
+  }
   const brand = String(
     d.hang_san_xuat || d.hang_san_xuat_thiet_bi || d.nha_san_xuat || d.hang_san_xuat_inventer || d.hang_san_xuat_pin || ''
   ).trim();
@@ -176,9 +233,24 @@ async function main() {
     for (const [typeId, node] of Object.entries(site)) {
       if (SITE_META.has(typeId) || !node || typeof node !== 'object') continue;
       for (const { index, device: d } of devicesOf(node)) {
-        const { brand, model } = brandModel(typeId, d);
-        const mKey = normModelKey(model, brand);
-        const brandN = canonBrand(brand, mKey);
+        let brand;
+        let model;
+        let mKey;
+        let brandN;
+        let kva = null;
+        if (typeId === 'may_phat_dien') {
+          const mpd = canonMayPhatDien(d);
+          brand = mpd.rawBrand;
+          model = mpd.model; // canonical display model (10KVA/20KVA or real model)
+          mKey = mpd.modelKey;
+          brandN = mpd.brand;
+          kva = mpd.kva;
+          if (!brandN) continue;
+        } else {
+          ({ brand, model } = brandModel(typeId, d));
+          mKey = normModelKey(model, brand);
+          brandN = canonBrand(brand, mKey);
+        }
         const key = kindKey(brandN, mKey);
         if (!key) continue;
 
@@ -195,6 +267,7 @@ async function main() {
           groups[typeId][key] = {
             brandN,
             mKey,
+            kva,
             rawBrands: [],
             rawModels: [],
             shared: null,
@@ -205,18 +278,13 @@ async function main() {
         const g = groups[typeId][key];
         g.rawBrands.push(brand);
         g.rawModels.push(model);
-        g.locs.push({ csht, typeId, index, device: d, brand, model });
+        g.locs.push({ csht, typeId, index, device: d, brand, model, brandN, mKey, kva });
         const score = Object.keys(shared).length;
         if (score > g.score) {
           g.score = score;
           g.shared = shared;
+          if (kva != null) g.kva = kva;
         }
-
-        const displayBrand = brandN;
-        const displayModel = model; // temporary; finalize later
-        // count if needs rewrite after we know final display
-        void displayBrand;
-        void displayModel;
       }
     }
   }
@@ -227,7 +295,10 @@ async function main() {
     alive[typeId] = {};
     for (const [key, g] of Object.entries(map)) {
       const brand = pickDisplayBrand(g.rawBrands, g.brandN);
-      const model = pickDisplayModel(g.mKey, g.rawModels);
+      const model =
+        typeId === 'may_phat_dien' && g.mKey
+          ? g.mKey
+          : pickDisplayModel(g.mKey, g.rawModels);
       const variants = new Set(
         g.locs.map((x) => `${x.brand || ''} · ${x.model || ''}`.trim())
       );
@@ -235,12 +306,19 @@ async function main() {
         merges.push({ typeId, key, brand, model, n: g.locs.length, variants: [...variants] });
       }
       const shared = { ...(g.shared || {}) };
-      if (brand) {
-        if ('hang_san_xuat' in shared || !Object.keys(shared).some((k) => k.startsWith('hang_'))) {
-          shared.hang_san_xuat = brand;
+      if (brand) shared.hang_san_xuat = brand;
+      if (typeId === 'may_phat_dien') {
+        if (model) shared.model = model;
+        else delete shared.model;
+        if (brand === 'BRUNO' && model) {
+          shared.cong_suat_danh_dinh_kva = model === '10KVA' ? '10' : '20';
+        } else if (g.kva != null && !shared.cong_suat_danh_dinh_kva) {
+          shared.cong_suat_danh_dinh_kva = String(g.kva);
         }
+        if (shared.loai_nhien_lieu === 'Đâu') shared.loai_nhien_lieu = 'Dầu';
+      } else if (model) {
+        shared.model = model;
       }
-      if (model) shared.model = model;
       alive[typeId][key] = {
         ...shared,
         brand: brand || null,
@@ -251,14 +329,24 @@ async function main() {
         lastEditedAt: Date.now(),
       };
 
-      // device field rewrites
       for (const loc of g.locs) {
         const patch = {};
         const curBrand = String(loc.device.hang_san_xuat || '').trim();
         const curModel = String(loc.device.model || '').trim();
         if (brand && curBrand !== brand) patch.hang_san_xuat = brand;
-        if (model && curModel !== model) patch.model = model;
-        // also clear empty model when canonical has model? only set when model non-empty
+        if (typeId === 'may_phat_dien') {
+          if (model && curModel !== model) patch.model = model;
+          else if (!model && curModel) patch.model = null;
+          if (brand === 'BRUNO' && model) {
+            const want = model === '10KVA' ? '10' : '20';
+            if (String(loc.device.cong_suat_danh_dinh_kva || '') !== want) {
+              patch.cong_suat_danh_dinh_kva = want;
+            }
+          }
+          if (loc.device.loai_nhien_lieu === 'Đâu') patch.loai_nhien_lieu = 'Dầu';
+        } else if (model && curModel !== model) {
+          patch.model = model;
+        }
         if (!Object.keys(patch).length) continue;
         devicePatches += 1;
         loc.patch = patch;
@@ -293,22 +381,14 @@ async function main() {
     console.log('wrote kinds', typeId, alive[typeId] ? Object.keys(alive[typeId]).length : 0);
   }
 
-  // Patch devices in batches per site
   let patched = 0;
   for (const [typeId, map] of Object.entries(groups)) {
     for (const g of Object.values(map)) {
-      const brand = pickDisplayBrand(g.rawBrands, g.brandN);
-      const model = pickDisplayModel(g.mKey, g.rawModels);
       for (const loc of g.locs) {
-        const body = {};
-        const curBrand = String(loc.device.hang_san_xuat || '').trim();
-        const curModel = String(loc.device.model || '').trim();
-        if (brand && curBrand !== brand) body.hang_san_xuat = brand;
-        if (model && curModel !== model) body.model = model;
-        if (!Object.keys(body).length) continue;
+        if (!loc.patch || !Object.keys(loc.patch).length) continue;
         await patchJson(
           `equipment/${encodeURIComponent(loc.csht)}/${encodeURIComponent(typeId)}/devices/${encodeURIComponent(loc.index)}`,
-          body
+          loc.patch
         );
         patched += 1;
       }

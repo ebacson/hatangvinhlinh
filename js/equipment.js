@@ -1,5 +1,5 @@
 /** Quản lý thiết bị trạm — root RTDB `equipment/{CSHT_…}` (chủng loại + thông số KT). */
-import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=87';
+import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=88';
 
 const BASE = '/hatangvinhlinh';
 
@@ -81,7 +81,7 @@ const TYPE_IDS = new Set(equipmentTypes().map((t) => t.id));
 export async function loadEquipmentCatalog() {
   if (catalogCache) return catalogCache;
   if (!catalogPromise) {
-    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=87`)
+    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=88`)
       .then((r) => {
         if (!r.ok) throw new Error('Không tải được file thiết bị');
         return r.json();
@@ -329,6 +329,13 @@ const BRAND_ALIASES = {
   POSTEG: 'POSTEF',
   POMAX: 'POSMAX',
   'POS MAX': 'POSMAX',
+  // Máy phát điện — lỗi chính tả / biến thể tên
+  AKASA: 'AKSA',
+  KIBILL: 'KIBII',
+  KILBILL: 'KIBII',
+  KOBUTA: 'KUBOTA',
+  HUUTOAN: 'HUU TOAN',
+  'KYO POWER': 'KYO',
 };
 
 /** Chuẩn hóa hãng để gom mẫu trùng. */
@@ -412,8 +419,88 @@ function brandModelParts(typeId, device) {
   return { brand, model };
 }
 
+/** Tách số KVA từ chữ (tên hãng / model / công suất). */
+export function parseEquipmentKva(...parts) {
+  for (const raw of parts) {
+    const s = String(raw || '').trim();
+    if (!s) continue;
+    const withUnit = s.match(/(\d+(?:[.,]\d+)?)\s*K\.?\s*V\.?\s*A/i);
+    if (withUnit) return Number(String(withUnit[1]).replace(',', '.'));
+    if (/^\d+(?:[.,]\d+)?$/.test(s)) {
+      const n = Number(s.replace(',', '.'));
+      if (Number.isFinite(n) && n > 0 && n < 10000) return n;
+    }
+  }
+  return null;
+}
+
+/** Bỏ hậu tố công suất khỏi tên hãng MPD: "BRUNO 10KVA" → "BRUNO". */
+export function stripBrandCapacitySuffix(brand) {
+  return String(brand || '')
+    .trim()
+    .replace(/\s*\d+(?:[.,]\d+)?\s*K\.?\s*V\.?\s*A\s*$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Máy phát điện: gom theo hãng; BRUNO tách 10KVA / 20KVA.
+ * Model kind = "10KVA" | "20KVA" (BRUNO) hoặc "" (hãng khác).
+ */
+export function canonicalMayPhatDien(device) {
+  const d = device || {};
+  const rawBrand = String(d.hang_san_xuat || d.nha_san_xuat || '').trim();
+  const rawModel = String(d.model || '').trim();
+  // "NO" / "No" thường là ghi nhầm, không phải model
+  const modelUseful = rawModel && !/^no$/i.test(rawModel) ? rawModel : '';
+  const kva = parseEquipmentKva(
+    rawBrand,
+    modelUseful,
+    d.cong_suat_danh_dinh_kva,
+    d.cong_suat_kva
+  );
+  let brand = normalizeEquipmentBrand(stripBrandCapacitySuffix(rawBrand).toUpperCase());
+  // Brand từng bị nhầm thành model số máy / "NO"
+  if (!brand || brand === 'NO') {
+    brand = '';
+  }
+  if (brand === 'HONDA EKBI') brand = 'HONDA';
+
+  let modelKey = '';
+  let model = '';
+  if (brand === 'BRUNO') {
+    // ≤15 → 10KVA; còn lại (kể cả thiếu số) → 20KVA (đa số)
+    const bucket = kva != null && kva <= 15 ? '10KVA' : '20KVA';
+    modelKey = bucket;
+    model = bucket;
+  } else if (modelUseful) {
+    modelKey = normalizeEquipmentModelKey(modelUseful, brand);
+    model = prettifyEquipmentModel(modelKey, modelUseful);
+  }
+
+  return {
+    brand,
+    model,
+    modelKey,
+    kva,
+    rawBrand,
+    rawModel,
+  };
+}
+
 /** Hãng/model đã chuẩn (để ghi kinds + hiển thị gom mẫu). */
 export function canonicalBrandModel(typeId, device) {
+  if (typeId === 'may_phat_dien') {
+    const mpd = canonicalMayPhatDien(device);
+    return {
+      brand: mpd.brand,
+      model: mpd.model,
+      modelKey: mpd.modelKey,
+      rawBrand: mpd.rawBrand,
+      rawModel: mpd.rawModel,
+      kva: mpd.kva,
+    };
+  }
   const { brand, model } = brandModelParts(typeId, device);
   const modelKey = normalizeEquipmentModelKey(model, brand);
   const brandN = canonicalKindBrand(brand, modelKey);
@@ -455,11 +542,25 @@ export function buildEquipmentKindRecord(typeId, device, who) {
   if (!kindKey) return null;
   const shared = sharedFieldsFromDevice(typeDef, device);
   if (!countEquipmentDataFields(shared)) return null;
-  const { brand, model } = canonicalBrandModel(typeId, device);
+  const canon = canonicalBrandModel(typeId, device);
+  const { brand, model } = canon;
   // Ghi hãng/model chuẩn vào shared để clone mẫu không tái tạo biến thể.
-  if (brand && shared.hang_san_xuat != null) shared.hang_san_xuat = brand;
-  if (brand && shared.hang_san_xuat_thiet_bi != null) shared.hang_san_xuat_thiet_bi = brand;
-  if (model && shared.model != null) shared.model = model;
+  if (brand) {
+    if (shared.hang_san_xuat != null || typeId === 'may_phat_dien') shared.hang_san_xuat = brand;
+    if (shared.hang_san_xuat_thiet_bi != null) shared.hang_san_xuat_thiet_bi = brand;
+  }
+  if (typeId === 'may_phat_dien') {
+    if (model) shared.model = model;
+    else delete shared.model;
+    // BRUNO: gắn công suất theo bucket; hãng khác: giữ/điền KVA nếu parse được.
+    if (brand === 'BRUNO' && model) {
+      shared.cong_suat_danh_dinh_kva = model === '10KVA' ? '10' : '20';
+    } else if (canon.kva != null && !shared.cong_suat_danh_dinh_kva) {
+      shared.cong_suat_danh_dinh_kva = String(canon.kva);
+    }
+  } else if (model && shared.model != null) {
+    shared.model = model;
+  }
   return {
     kindKey,
     record: {
