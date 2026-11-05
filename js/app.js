@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=110';
+} from './config.js?v=111';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=110';
+} from './forecast.js?v=111';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=110';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=110';
+} from './stats.js?v=111';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=111';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -67,8 +67,8 @@ import {
   applyPostefAcquyYearFromSerial,
   findEquipmentSerialConflict,
   isUniqueEquipmentField,
-} from './equipment.js?v=110';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=110';
+} from './equipment.js?v=111';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=111';
 
 
 const app = initializeApp(firebaseConfig);
@@ -103,6 +103,8 @@ const state = {
   stations: [],
   query: '',
   equipmentQuery: '',
+  equipmentFindOpen: false,
+  equipmentFindQuery: '',
   /** 'all' | 'nearest' */
   equipmentGeoFilter: 'all',
   /** Vị trí GPS hiện tại: { lat, lng, accuracy, at } | null */
@@ -575,7 +577,10 @@ function render() {
 
   if (state.tab === 'stations') renderStations();
   if (state.tab === 'alerts') renderAlerts();
-  if (state.tab === 'equipment') renderEquipmentList();
+  if (state.tab === 'equipment') {
+    renderEquipmentList();
+    renderEquipmentFind();
+  }
   if (state.tab === 'stats' && canViewStats()) renderStats();
   if (state.tab === 'settings') renderSettings();
   renderDetail();
@@ -2429,6 +2434,81 @@ function exportEquipmentExcel() {
   toast(`Đã xuất ${list.length} CSHT · ${sheets.length} sheet`);
 }
 
+function equipmentSearchSnippet(typeDef, device) {
+  const serial = String(device?.serial || device?.serial_dan_lanh || device?.serial_dan_nong || '').trim();
+  const brand = String(
+    device?.hang_san_xuat || device?.hang_san_xuat_thiet_bi || device?.nha_san_xuat || ''
+  ).trim();
+  const model = String(device?.model || '').trim();
+  return [brand, model, serial].filter(Boolean).join(' · ') || 'Chưa có thông số';
+}
+
+function searchEquipmentDevices(query) {
+  const q = String(query || '').trim().toLowerCase();
+  const qCompact = q.replace(/\s+/g, '');
+  if (qCompact.length < 2) return [];
+  const hits = [];
+  for (const [maCsht, site] of Object.entries(state.equipmentByCsht || {})) {
+    const norm = normalizeEquipment(site);
+    for (const typeDef of equipmentTypes()) {
+      const devices = norm[typeDef.id] || [];
+      devices.forEach((device, index) => {
+        const parts = (typeDef.fields || []).map((f) => device?.[f.key]).filter((v) => v != null && String(v).trim() !== '');
+        const blob = `${typeDef.title} ${parts.join(' ')}`.toLowerCase();
+        const compact = blob.replace(/\s+/g, '');
+        if (!blob.includes(q) && !compact.includes(qCompact)) return;
+        hits.push({ maCsht, site, typeDef, index, device });
+      });
+    }
+  }
+  hits.sort((a, b) => {
+    const ac = formatMaTram(a.site?.maTram) || a.maCsht;
+    const bc = formatMaTram(b.site?.maTram) || b.maCsht;
+    return ac.localeCompare(bc, 'vi') || a.typeDef.title.localeCompare(b.typeDef.title, 'vi') || a.index - b.index;
+  });
+  return hits.slice(0, 40);
+}
+
+function renderEquipmentFind() {
+  const panel = $('#equipment-find');
+  const btn = $('#equipment-find-btn');
+  if (btn) btn.classList.toggle('is-active', !!state.equipmentFindOpen);
+  if (!panel) return;
+  panel.hidden = !state.equipmentFindOpen;
+  if (!state.equipmentFindOpen) return;
+  const input = $('#equipment-find-input');
+  if (input && document.activeElement !== input && input.value !== state.equipmentFindQuery) {
+    input.value = state.equipmentFindQuery;
+  }
+  const results = $('#equipment-find-results');
+  if (!results) return;
+  const q = state.equipmentFindQuery.trim();
+  if (q.replace(/\s+/g, '').length < 2) {
+    results.innerHTML = `<p class="muted tiny">Nhập ít nhất 2 ký tự: serial, hãng hoặc model.</p>`;
+    return;
+  }
+  const hits = searchEquipmentDevices(q);
+  if (!hits.length) {
+    results.innerHTML = `<p class="muted tiny">Không thấy thiết bị khớp.</p>`;
+    return;
+  }
+  results.innerHTML = hits
+    .map((hit) => {
+      const code = formatMaTram(hit.site?.maTram) || hit.maCsht;
+      const name = hit.site?.tenTram ? ` · ${hit.site.tenTram}` : '';
+      const snippet = equipmentSearchSnippet(hit.typeDef, hit.device);
+      return `<button type="button" class="equipment-find-hit" data-find-csht="${escapeAttr(
+        hit.maCsht
+      )}" data-find-type="${escapeAttr(hit.typeDef.id)}" data-find-index="${hit.index}">
+        <strong>${escapeHtml(code)}${escapeHtml(name)}</strong>
+        <span>${escapeHtml(hit.typeDef.title)} · ${escapeHtml(equipmentUnitOptionLabel(hit.typeDef.id, hit.index))} · ${escapeHtml(
+          snippet
+        )}</span>
+      </button>`;
+    })
+    .join('');
+}
+
 function renderEquipmentList() {
   const root = $('#equipment-list');
   const empty = $('#equipment-empty');
@@ -3110,6 +3190,20 @@ function bindEvents() {
   $('#equipment-search')?.addEventListener('input', (e) => {
     state.equipmentQuery = e.target.value;
     renderEquipmentList();
+  });
+  $('#equipment-find-btn')?.addEventListener('click', () => {
+    state.equipmentFindOpen = !state.equipmentFindOpen;
+    renderEquipmentFind();
+    if (state.equipmentFindOpen) $('#equipment-find-input')?.focus();
+  });
+  $('#equipment-find-input')?.addEventListener('input', (e) => {
+    state.equipmentFindQuery = e.target.value;
+    renderEquipmentFind();
+  });
+  $('#equipment-find-results')?.addEventListener('click', (e) => {
+    const hit = e.target.closest('[data-find-csht]');
+    if (!hit) return;
+    openEquipmentSheet(hit.dataset.findCsht, hit.dataset.findType, Number(hit.dataset.findIndex));
   });
   $('#equipment-geo-filter')?.addEventListener('change', (e) => {
     onEquipmentGeoFilterChange(e.target.value || 'all');
