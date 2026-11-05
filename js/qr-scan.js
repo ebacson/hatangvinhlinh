@@ -1,6 +1,20 @@
 /** Quét QR / Code 128 bằng camera (BarcodeDetector, fallback jsQR cho QR). */
 
-const BARCODE_FORMATS = ['qr_code', 'code_128', 'code_39', 'data_matrix'];
+const BARCODE_FORMATS = [
+  'qr_code',
+  'code_128',
+  'code_39',
+  'code_93',
+  'ean_13',
+  'ean_8',
+  'upc_a',
+  'upc_e',
+  'itf',
+  'codabar',
+  'data_matrix',
+  'pdf417',
+  'aztec',
+];
 /** Hai lần đọc giống nhau, cách nhau một nhịp, mới nhận — tránh khung mờ ra sai. */
 const CONFIRM_HITS = 2;
 const SCAN_GAP_MS = 140;
