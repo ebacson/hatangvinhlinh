@@ -569,15 +569,9 @@ export function canonicalBinhAcquy(device) {
 
   if (brand === 'POSTEF' || brand === 'POSTEG') {
     brand = 'POSTEF';
-    const tech = String(d.cong_nghe_accu || '').toLowerCase();
-    const v = String(d.dien_ap_binh || '');
-    const ah = String(d.dung_luong_binh || d.dung_luong || '');
-    const looksLfp =
-      !modelKey ||
-      modelKey === 'VLFP48100' ||
-      /lfp/i.test(model) ||
-      tech.includes('lithium') ||
-      (v === '48' && (ah === '100' || ah === ''));
+    // Chỉ gom V-LFP khi model trống hoặc đúng dòng LFP.
+    // Không gom theo Lithium/48V/100Ah — SDA10-48100 cũng cùng thông số đó.
+    const looksLfp = !modelKey || modelKey === 'VLFP48100' || /lfp/i.test(model);
     if (looksLfp) {
       model = 'V-LFP48100';
       modelKey = 'VLFP48100';
