@@ -1,5 +1,5 @@
 /** Quản lý thiết bị trạm — root RTDB `equipment/{CSHT_…}` (chủng loại + thông số KT). */
-import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=108';
+import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=109';
 
 const BASE = '/hatangvinhlinh';
 
@@ -81,7 +81,7 @@ const TYPE_IDS = new Set(equipmentTypes().map((t) => t.id));
 export async function loadEquipmentCatalog() {
   if (catalogCache) return catalogCache;
   if (!catalogPromise) {
-    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=108`)
+    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=109`)
       .then((r) => {
         if (!r.ok) throw new Error('Không tải được file thiết bị');
         return r.json();
@@ -163,6 +163,62 @@ export function equipmentSummary(siteOrDevices) {
 
 function isSerialField(f) {
   return /serial/i.test(f?.key || '') || /^serial\b/i.test(f?.label || '');
+}
+
+/** So khớp serial không phân biệt hoa thường và khoảng trắng. */
+export function normalizeEquipmentSerial(value) {
+  return String(value || '')
+    .trim()
+    .replace(/\s+/g, '')
+    .toUpperCase();
+}
+
+/**
+ * Cùng loại thiết bị không được trùng số serial.
+ * `existingElsewhere`: thiết bị loại này ở CSHT khác [{ device, csht, maTram }].
+ * Trả về xung đột đầu tiên, hoặc null.
+ */
+export function findEquipmentSerialConflict(typeDef, devices, existingElsewhere = []) {
+  const fields = (typeDef?.fields || []).filter(isSerialField);
+  if (!fields.length) return null;
+  const seen = new Map();
+  const register = (device, loc, report) => {
+    const onDevice = new Set();
+    for (const f of fields) {
+      const raw = String(device?.[f.key] ?? '').trim();
+      const norm = normalizeEquipmentSerial(raw);
+      if (!norm || onDevice.has(norm)) continue;
+      onDevice.add(norm);
+      const prev = seen.get(norm);
+      if (prev && report) {
+        return {
+          serial: raw,
+          fieldLabel: f.label || 'Serial',
+          index: loc.index,
+          otherIndex: prev.index,
+          otherCsht: prev.csht,
+          otherMaTram: prev.maTram,
+        };
+      }
+      if (!prev) {
+        seen.set(norm, {
+          index: loc.index,
+          csht: loc.csht || '',
+          maTram: loc.maTram || '',
+        });
+      }
+    }
+    return null;
+  };
+  for (const row of existingElsewhere) {
+    register(row?.device || {}, { index: null, csht: row?.csht, maTram: row?.maTram }, false);
+  }
+  const list = Array.isArray(devices) ? devices : [];
+  for (let i = 0; i < list.length; i += 1) {
+    const hit = register(list[i], { index: i, csht: '', maTram: '' }, true);
+    if (hit) return hit;
+  }
+  return null;
 }
 
 export function buildEquipmentFieldsHtml(typeDef, values) {

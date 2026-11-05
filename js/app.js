@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=108';
+} from './config.js?v=109';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=108';
+} from './forecast.js?v=109';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=108';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=108';
+} from './stats.js?v=109';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=109';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -65,9 +65,10 @@ import {
   equipmentKindLabel,
   applyBinhAcquyInferredFields,
   applyPostefAcquyYearFromSerial,
+  findEquipmentSerialConflict,
   isUniqueEquipmentField,
-} from './equipment.js?v=108';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=108';
+} from './equipment.js?v=109';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=109';
 
 
 const app = initializeApp(firebaseConfig);
@@ -2085,6 +2086,31 @@ function equipmentDevicesByCsht(csht) {
   return normalizeEquipment(equipmentSiteByCsht(csht));
 }
 
+/** Thiết bị cùng loại ở các CSHT khác — dùng để chặn trùng serial. */
+function equipmentSerialsElsewhere(typeId, csht) {
+  const rows = [];
+  const current = String(csht || '').trim();
+  for (const [siteCsht, site] of Object.entries(state.equipmentByCsht || {})) {
+    if (!site || siteCsht === current) continue;
+    const list = normalizeEquipment(site)[typeId] || [];
+    const maTram = site.maTram || (Array.isArray(site.maTrams) ? site.maTrams[0] : '') || '';
+    for (const device of list) rows.push({ device, csht: siteCsht, maTram });
+  }
+  return rows;
+}
+
+function equipmentSerialConflictMessage(typeDef, hit) {
+  const serial = hit?.serial || '';
+  if (hit?.otherCsht) {
+    const where = hit.otherMaTram ? formatMaTram(hit.otherMaTram) : hit.otherCsht;
+    return `Serial ${serial} đã có trên ${typeDef.title} tại ${where}`;
+  }
+  const unit = equipmentUnitLabel(typeDef.id);
+  const a = Number(hit?.otherIndex ?? 0) + 1;
+  const b = Number(hit?.index ?? 0) + 1;
+  return `Serial ${serial} trùng giữa ${unit} ${a} và ${unit} ${b}`;
+}
+
 /** Profile Máy nổ tốt nhất theo mã CSHT (nhiều field nhất). */
 function bestStationProfileForCsht(csht) {
   const key = String(csht || '').trim();
@@ -2944,6 +2970,15 @@ async function saveEquipment() {
     toast('Thiếu mã CSHT — không lưu được thiết bị');
     return;
   }
+  const serialHit = findEquipmentSerialConflict(
+    typeDef,
+    devices,
+    equipmentSerialsElsewhere(typeId, csht)
+  );
+  if (serialHit) {
+    toast(equipmentSerialConflictMessage(typeDef, serialHit));
+    return;
+  }
   // Lưu form trống sẽ làm Firebase bỏ `devices: {}` → mất MPD trên list.
   if (!devices.length) {
     const existingN = (equipmentDevicesByCsht(csht)[typeId] || []).length;
@@ -2998,7 +3033,7 @@ function toast(msg) {
   clearTimeout(toast._t);
   toast._t = setTimeout(() => {
     el.hidden = true;
-  }, 2800);
+  }, 4200);
 }
 
 /* ---------- Wire up ---------- */
