@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=109';
+} from './config.js?v=110';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=109';
+} from './forecast.js?v=110';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=109';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=109';
+} from './stats.js?v=110';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=110';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -67,8 +67,8 @@ import {
   applyPostefAcquyYearFromSerial,
   findEquipmentSerialConflict,
   isUniqueEquipmentField,
-} from './equipment.js?v=109';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=109';
+} from './equipment.js?v=110';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=110';
 
 
 const app = initializeApp(firebaseConfig);
@@ -1071,7 +1071,6 @@ function renderStations() {
       const code = s.profile.maTram || s.stationKey;
       const name = s.profile.tenTram || 'Chưa có tên site';
       const maCsht = (s.profile.maCsht || '').trim();
-      const maKhoa = (s.profile.maKhoaTram || '').trim();
       const generator = (s.profile.generatorName || '').trim();
       const addr = s.profile.diaChi || 'Chưa có địa chỉ';
       const predicted = stationForecast(s);
@@ -1127,15 +1126,6 @@ function renderStations() {
           <div class="station-kv-row">
             <span class="station-kv-l">CSHT</span>
             <strong class="station-kv-v">${escapeHtml(maCsht || '—')}</strong>
-          </div>
-          <div class="station-kv-row station-kv-action">
-            <div class="station-kv-text">
-              <span class="station-kv-l">Mã khóa</span>
-              <strong class="station-kv-v">${escapeHtml(maKhoa || '—')}</strong>
-            </div>
-            <button type="button" class="btn-outline station-action-btn" data-action="lock" data-key="${escapeAttr(
-              s.stationKey
-            )}">Cập nhật MK</button>
           </div>
           <div class="station-kv-row station-kv-action">
             <div class="station-kv-text">
@@ -2086,6 +2076,53 @@ function equipmentDevicesByCsht(csht) {
   return normalizeEquipment(equipmentSiteByCsht(csht));
 }
 
+/** Trạm (profile mã khóa) gắn với một card CSHT. */
+function stationsForEquipmentSite(row) {
+  const csht = String(row?.maCsht || '').trim();
+  const codes = new Set(
+    [row?.maTram, ...(row?.maTrams || [])]
+      .map((x) => formatMaTram(x))
+      .filter(Boolean)
+  );
+  const seen = new Set();
+  return state.stations.filter((s) => {
+    if (seen.has(s.stationKey)) return false;
+    const scsht = String(s.profile?.maCsht || '').trim();
+    const code = formatMaTram(s.profile?.maTram || s.stationKey);
+    const hit = (csht && scsht === csht) || (code && codes.has(code));
+    if (!hit) return false;
+    seen.add(s.stationKey);
+    return true;
+  });
+}
+
+function equipmentLockRowsHtml(row) {
+  const stations = stationsForEquipmentSite(row);
+  if (!stations.length) {
+    return `<div class="station-kv-row">
+      <span class="station-kv-l">Mã khóa</span>
+      <strong class="station-kv-v">—</strong>
+    </div>`;
+  }
+  const many = stations.length > 1;
+  return stations
+    .map((s) => {
+      const code = formatMaTram(s.profile.maTram || s.stationKey);
+      const maKhoa = (s.profile.maKhoaTram || '').trim();
+      const label = many && code ? `Mã khóa · ${code}` : 'Mã khóa';
+      return `<div class="station-kv-row station-kv-action">
+        <div class="station-kv-text">
+          <span class="station-kv-l">${escapeHtml(label)}</span>
+          <strong class="station-kv-v">${escapeHtml(maKhoa || '—')}</strong>
+        </div>
+        <button type="button" class="btn-outline station-action-btn" data-action="lock" data-key="${escapeAttr(
+          s.stationKey
+        )}">Cập nhật MK</button>
+      </div>`;
+    })
+    .join('');
+}
+
 /** Thiết bị cùng loại ở các CSHT khác — dùng để chặn trùng serial. */
 function equipmentSerialsElsewhere(typeId, csht) {
   const rows = [];
@@ -2470,6 +2507,7 @@ function renderEquipmentList() {
         <p class="station-addr">${escapeHtml(r.maCsht)}${escapeHtml(maExtra)} · LAT/LONG: ${geo}</p>
         ${distHtml}
         <div class="station-kv">
+          ${equipmentLockRowsHtml(r)}
           <div class="station-kv-row station-kv-action eq-kv-stack">
             <div class="station-kv-text eq-kv-types">
               <span class="station-kv-l">Thiết bị</span>
@@ -3098,6 +3136,13 @@ function bindEvents() {
     }
   });
   $('#equipment-list')?.addEventListener('click', (e) => {
+    const lockBtn = e.target.closest('[data-action="lock"][data-key]');
+    if (lockBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      openStationSheet(lockBtn.dataset.key, 'lock');
+      return;
+    }
     const dirBtn = e.target.closest('[data-action="eq-directions"][data-csht]');
     if (dirBtn) {
       e.preventDefault();
@@ -3157,7 +3202,6 @@ function bindEvents() {
     const key = btn.dataset.key;
     const action = btn.dataset.action;
     if (action === 'edit') openStationSheet(key, 'edit');
-    else if (action === 'lock') openStationSheet(key, 'lock');
     else if (action === 'station') openStationSheet(key, 'station');
     else if (action === 'delete') openStationSheet(key, 'delete');
     else if (action === 'history') openStationSheet(key, 'history');
