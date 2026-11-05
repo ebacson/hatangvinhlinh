@@ -1,20 +1,9 @@
-/** Quét QR / barcode bằng camera (BarcodeDetector, fallback jsQR cho QR). */
+/** Quét QR / Code 128 bằng camera (BarcodeDetector, fallback jsQR cho QR). */
 
-const BARCODE_FORMATS = [
-  'qr_code',
-  'code_128',
-  'code_39',
-  'code_93',
-  'ean_13',
-  'ean_8',
-  'upc_a',
-  'upc_e',
-  'itf',
-  'codabar',
-  'data_matrix',
-  'pdf417',
-  'aztec',
-];
+const BARCODE_FORMATS = ['qr_code', 'code_128'];
+/** Hai lần đọc giống nhau, cách nhau một nhịp, mới nhận — tránh khung mờ ra sai. */
+const CONFIRM_HITS = 2;
+const SCAN_GAP_MS = 140;
 
 let active = null;
 
@@ -35,7 +24,7 @@ function ensureOverlay() {
         <video playsinline muted autoplay></video>
         <div class="qr-scan-frame" aria-hidden="true"></div>
       </div>
-      <p class="qr-scan-hint muted tiny" data-qr-hint>Đưa mã QR / barcode vào khung hình</p>
+      <p class="qr-scan-hint muted tiny" data-qr-hint>Giữ mã QR / Code 128 trong khung đến khi nhận</p>
       <p class="qr-scan-status muted tiny" data-qr-status hidden></p>
     </div>`;
   document.body.appendChild(el);
@@ -67,27 +56,111 @@ function loadJsQR() {
 async function createBarcodeDetector() {
   if (!('BarcodeDetector' in window)) return null;
   try {
-    let formats = BARCODE_FORMATS;
+    let formats = BARCODE_FORMATS.slice();
     if (typeof window.BarcodeDetector.getSupportedFormats === 'function') {
       const supported = await window.BarcodeDetector.getSupportedFormats();
       if (Array.isArray(supported) && supported.length) {
         formats = BARCODE_FORMATS.filter((f) => supported.includes(f));
-        if (!formats.length) formats = supported.slice();
       }
     }
+    if (!formats.length) return null;
     return new window.BarcodeDetector({ formats });
   } catch {
-    try {
-      return new window.BarcodeDetector();
-    } catch {
-      return null;
-    }
+    return null;
   }
 }
 
 function stopStream(stream) {
   if (!stream) return;
   for (const track of stream.getTracks()) track.stop();
+}
+
+async function openCamera() {
+  const attempts = [
+    {
+      audio: false,
+      video: {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+      },
+    },
+    {
+      audio: false,
+      video: {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+    },
+  ];
+  let lastErr = null;
+  for (const constraints of attempts) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      const track = stream.getVideoTracks()[0];
+      try {
+        const caps = track?.getCapabilities?.() || {};
+        if (Array.isArray(caps.focusMode) && caps.focusMode.includes('continuous')) {
+          await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+        }
+      } catch {
+        /* máy không cho chỉnh nét — vẫn quét */
+      }
+      return stream;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr || new Error('Không mở được camera');
+}
+
+/**
+ * Vùng khung hình (object-fit: cover) đổi sang pixel của video nguồn.
+ * inset CSS: 18% dọc, 14% ngang.
+ */
+function viewfinderSourceRect(video) {
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
+  const rect = video.getBoundingClientRect();
+  if (!vw || !vh || !rect.width || !rect.height) return null;
+  const scale = Math.max(rect.width / vw, rect.height / vh);
+  const offsetX = (rect.width - vw * scale) / 2;
+  const offsetY = (rect.height - vh * scale) / 2;
+  const frameLeft = rect.left + rect.width * 0.14;
+  const frameTop = rect.top + rect.height * 0.18;
+  const frameW = rect.width * 0.72;
+  const frameH = rect.height * 0.64;
+  const sx = Math.max(0, Math.floor((frameLeft - rect.left - offsetX) / scale));
+  const sy = Math.max(0, Math.floor((frameTop - rect.top - offsetY) / scale));
+  const sw = Math.min(vw - sx, Math.ceil(frameW / scale));
+  const sh = Math.min(vh - sy, Math.ceil(frameH / scale));
+  if (sw < 48 || sh < 48) return null;
+  return { sx, sy, sw, sh };
+}
+
+function pickCenteredCode(codes, width, height) {
+  if (!codes?.length) return '';
+  const cx = width / 2;
+  const cy = height / 2;
+  let best = '';
+  let bestD = Infinity;
+  for (const code of codes) {
+    const raw = String(code?.rawValue || '').trim();
+    if (!raw) continue;
+    const box = code.boundingBox;
+    let d = 0;
+    if (box && Number.isFinite(box.x) && Number.isFinite(box.y)) {
+      const bx = box.x + (Number(box.width) || 0) / 2;
+      const by = box.y + (Number(box.height) || 0) / 2;
+      d = (bx - cx) ** 2 + (by - cy) ** 2;
+    }
+    if (d < bestD) {
+      bestD = d;
+      best = raw;
+    }
+  }
+  return best;
 }
 
 export function isQrScannerOpen() {
@@ -116,7 +189,7 @@ function cleanupActive() {
 }
 
 /**
- * Mở camera và quét QR/barcode. Trả về chuỗi khi đọc được, hoặc null nếu đóng.
+ * Mở camera và quét QR/Code 128. Trả về chuỗi khi đọc ổn định, hoặc null nếu đóng.
  * @returns {Promise<string|null>}
  */
 export function openQrScanner() {
@@ -127,7 +200,7 @@ export function openQrScanner() {
   const hint = overlay.querySelector('[data-qr-hint]');
   const closeBtn = overlay.querySelector('[data-qr-close]');
   overlay.hidden = false;
-  if (hint) hint.textContent = 'Đưa mã QR / barcode vào khung hình';
+  if (hint) hint.textContent = 'Giữ mã QR / Code 128 trong khung đến khi nhận';
   setStatus(status, 'Đang mở camera…');
 
   return new Promise(async (resolve) => {
@@ -136,14 +209,31 @@ export function openQrScanner() {
     let raf = 0;
     let detector = null;
     let jsQR = null;
+    let lastValue = '';
+    let streak = 0;
+    let busy = false;
+    let lastDone = 0;
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const small = document.createElement('canvas');
+    const smallCtx = small.getContext('2d', { willReadFrequently: true });
 
     const finish = (value) => {
       if (settled) return;
       settled = true;
       cleanupActive();
       resolve(value);
+    };
+
+    const note = (raw) => {
+      const value = String(raw || '').trim();
+      if (!value) return;
+      if (value === lastValue) streak += 1;
+      else {
+        lastValue = value;
+        streak = 1;
+      }
+      if (streak >= CONFIRM_HITS) finish(value);
     };
 
     active = {
@@ -159,6 +249,42 @@ export function openQrScanner() {
       if (e.target === overlay) finish(null);
     };
 
+    const drawViewfinder = () => {
+      const crop = viewfinderSourceRect(video);
+      if (!crop) return null;
+      canvas.width = crop.sw;
+      canvas.height = crop.sh;
+      ctx.drawImage(video, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, crop.sw, crop.sh);
+      return crop;
+    };
+
+    const scanOnce = async () => {
+      if (video.readyState < 2 || !video.videoWidth) return '';
+      const crop = drawViewfinder();
+      if (!crop) return '';
+      if (detector) {
+        const codes = await detector.detect(canvas);
+        return pickCenteredCode(codes, canvas.width, canvas.height);
+      }
+      if (!jsQR) return '';
+      const maxW = 960;
+      let srcCanvas = canvas;
+      let srcCtx = ctx;
+      if (canvas.width > maxW) {
+        const scale = maxW / canvas.width;
+        small.width = Math.round(canvas.width * scale);
+        small.height = Math.round(canvas.height * scale);
+        smallCtx.drawImage(canvas, 0, 0, small.width, small.height);
+        srcCanvas = small;
+        srcCtx = smallCtx;
+      }
+      const imageData = srcCtx.getImageData(0, 0, srcCanvas.width, srcCanvas.height);
+      const code = jsQR(imageData.data, srcCanvas.width, srcCanvas.height, {
+        inversionAttempts: 'attemptBoth',
+      });
+      return code?.data ? String(code.data).trim() : '';
+    };
+
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
         throw new Error('Trình duyệt không hỗ trợ camera');
@@ -167,17 +293,10 @@ export function openQrScanner() {
       detector = await createBarcodeDetector();
       if (!detector) {
         jsQR = await loadJsQR();
-        if (hint) hint.textContent = 'Đưa mã QR vào khung hình (barcode cần Chrome/Safari mới)';
+        if (hint) hint.textContent = 'Đưa mã QR vào khung (barcode sọc cần Chrome hoặc Safari mới)';
       }
 
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: {
-          facingMode: { ideal: 'environment' },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-      });
+      stream = await openCamera();
       if (settled) {
         stopStream(stream);
         return;
@@ -189,35 +308,18 @@ export function openQrScanner() {
 
       const tick = async () => {
         if (settled) return;
-        try {
-          if (detector && video.readyState >= 2) {
-            const codes = await detector.detect(video);
-            if (codes?.length) {
-              const raw = String(codes[0].rawValue || '').trim();
-              if (raw) {
-                finish(raw);
-                return;
-              }
-            }
-          } else if (jsQR && video.readyState >= 2 && video.videoWidth) {
-            const w = video.videoWidth;
-            const h = video.videoHeight;
-            canvas.width = w;
-            canvas.height = h;
-            ctx.drawImage(video, 0, 0, w, h);
-            const imageData = ctx.getImageData(0, 0, w, h);
-            const code = jsQR(imageData.data, w, h, { inversionAttempts: 'dontInvert' });
-            if (code?.data) {
-              const raw = String(code.data).trim();
-              if (raw) {
-                finish(raw);
-                return;
-              }
-            }
+        if (!busy && performance.now() - lastDone >= SCAN_GAP_MS) {
+          busy = true;
+          try {
+            const raw = await scanOnce();
+            if (!settled && raw) note(raw);
+          } catch {
+            /* tiếp tục quét */
           }
-        } catch {
-          /* continue scanning */
+          busy = false;
+          lastDone = performance.now();
         }
+        if (settled) return;
         raf = requestAnimationFrame(tick);
         if (active) active.raf = raf;
       };
