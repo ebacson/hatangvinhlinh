@@ -24,7 +24,7 @@ function ensureOverlay() {
         <video playsinline muted autoplay></video>
         <div class="qr-scan-frame" aria-hidden="true"></div>
       </div>
-      <p class="qr-scan-hint muted tiny" data-qr-hint>Giữ mã trong khung đến khi nhận</p>
+      <p class="qr-scan-hint muted tiny" data-qr-hint>Đưa sát mã vạch hoặc QR nhỏ, giữ ngang trong khung</p>
       <p class="qr-scan-status muted tiny" data-qr-status hidden></p>
     </div>`;
   document.body.appendChild(el);
@@ -119,11 +119,24 @@ async function openCamera() {
   throw lastErr || new Error('Không mở được camera');
 }
 
+function preferSerial(values) {
+  const uniq = [...new Set(values.map((v) => String(v || '').trim()).filter(Boolean))];
+  if (!uniq.length) return '';
+  const tagged = uniq.find((v) => /VF[LF]\d{6,}/i.test(v));
+  if (tagged) {
+    const m = tagged.match(/VF[LF]\d{6,}/i);
+    return m ? m[0].toUpperCase() : tagged;
+  }
+  const plain = uniq.filter((v) => /^[A-Za-z0-9-]{8,}$/.test(v));
+  if (plain.length) return plain.sort((a, b) => b.length - a.length)[0];
+  return uniq.sort((a, b) => b.length - a.length)[0];
+}
+
 /**
  * Vùng khung hình (object-fit: cover) đổi sang pixel của video nguồn.
- * inset CSS: 18% dọc, 14% ngang.
+ * inset CSS: 18% dọc, 14% ngang. loosen nới vùng để mã nhỏ không phải nằm đúng tâm.
  */
-function viewfinderSourceRect(video) {
+function viewfinderSourceRect(video, loosen = 0) {
   const vw = video.videoWidth;
   const vh = video.videoHeight;
   const rect = video.getBoundingClientRect();
@@ -131,10 +144,12 @@ function viewfinderSourceRect(video) {
   const scale = Math.max(rect.width / vw, rect.height / vh);
   const offsetX = (rect.width - vw * scale) / 2;
   const offsetY = (rect.height - vh * scale) / 2;
-  const frameLeft = rect.left + rect.width * 0.14;
-  const frameTop = rect.top + rect.height * 0.18;
-  const frameW = rect.width * 0.72;
-  const frameH = rect.height * 0.64;
+  const insetX = Math.max(0.04, 0.14 - loosen);
+  const insetY = Math.max(0.05, 0.18 - loosen);
+  const frameLeft = rect.left + rect.width * insetX;
+  const frameTop = rect.top + rect.height * insetY;
+  const frameW = rect.width * (1 - insetX * 2);
+  const frameH = rect.height * (1 - insetY * 2);
   const sx = Math.max(0, Math.floor((frameLeft - rect.left - offsetX) / scale));
   const sy = Math.max(0, Math.floor((frameTop - rect.top - offsetY) / scale));
   const sw = Math.min(vw - sx, Math.ceil(frameW / scale));
@@ -218,7 +233,7 @@ export function openQrScanner() {
   const hint = overlay.querySelector('[data-qr-hint]');
   const closeBtn = overlay.querySelector('[data-qr-close]');
   overlay.hidden = false;
-  if (hint) hint.textContent = 'Giữ mã trong khung đến khi nhận';
+  if (hint) hint.textContent = 'Đưa sát mã vạch hoặc QR nhỏ, giữ ngang trong khung';
   setStatus(status, 'Đang mở camera…');
 
   return new Promise(async (resolve) => {
@@ -227,6 +242,12 @@ export function openQrScanner() {
     let raf = 0;
     let detector = null;
     let jsQR = null;
+    const jsQRReady = loadJsQR()
+      .then((fn) => {
+        jsQR = fn;
+        return fn;
+      })
+      .catch(() => null);
     let lastValue = '';
     let streak = 0;
     let busy = false;
@@ -265,23 +286,49 @@ export function openQrScanner() {
       if (e.target === overlay) finish(null);
     };
 
+    const rawValues = (codes) =>
+      (codes || []).map((c) => String(c?.rawValue || '').trim()).filter(Boolean);
+
+    /** Phóng vùng giữa khung để vạch mỏng / QR nhỏ đủ điểm ảnh. */
+    const drawZoomedViewfinder = () => {
+      const crop = viewfinderSourceRect(video, 0.08);
+      if (!crop) return false;
+      const scale = Math.min(3, 1600 / crop.sw);
+      canvas.width = Math.max(1, Math.round(crop.sw * scale));
+      canvas.height = Math.max(1, Math.round(crop.sh * scale));
+      ctx.imageSmoothingEnabled = false;
+      ctx.filter = 'contrast(1.35)';
+      ctx.drawImage(video, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, canvas.width, canvas.height);
+      ctx.filter = 'none';
+      return true;
+    };
+
     const scanOnce = async () => {
       if (video.readyState < 2 || !video.videoWidth) return '';
+      const values = [];
       if (detector) {
-        const codes = await detector.detect(video);
-        return pickScanValue(codes, video);
+        try {
+          values.push(pickScanValue(await detector.detect(video), video));
+        } catch {
+          /* thử ảnh phóng to */
+        }
+        if (drawZoomedViewfinder()) {
+          try {
+            values.push(...rawValues(await detector.detect(canvas)));
+          } catch {
+            /* canvas không đọc được trên một số máy */
+          }
+        }
       }
-      if (!jsQR) return '';
-      const maxW = 1080;
-      const scale = video.videoWidth > maxW ? maxW / video.videoWidth : 1;
-      const w = Math.max(1, Math.round(video.videoWidth * scale));
-      const h = Math.max(1, Math.round(video.videoHeight * scale));
-      canvas.width = w;
-      canvas.height = h;
-      ctx.drawImage(video, 0, 0, w, h);
-      const imageData = ctx.getImageData(0, 0, w, h);
-      const code = jsQR(imageData.data, w, h, { inversionAttempts: 'attemptBoth' });
-      return code?.data ? String(code.data).trim() : '';
+      if (!jsQR) jsQR = await jsQRReady;
+      if (jsQR && drawZoomedViewfinder()) {
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, canvas.width, canvas.height, {
+          inversionAttempts: 'attemptBoth',
+        });
+        if (code?.data) values.push(String(code.data).trim());
+      }
+      return preferSerial(values);
     };
 
     try {
