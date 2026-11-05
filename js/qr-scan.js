@@ -1,6 +1,6 @@
 /** Quét QR / Code 128 bằng camera (BarcodeDetector, fallback jsQR cho QR). */
 
-const BARCODE_FORMATS = ['qr_code', 'code_128'];
+const BARCODE_FORMATS = ['qr_code', 'code_128', 'code_39', 'data_matrix'];
 /** Hai lần đọc giống nhau, cách nhau một nhịp, mới nhận — tránh khung mờ ra sai. */
 const CONFIRM_HITS = 2;
 const SCAN_GAP_MS = 140;
@@ -24,7 +24,7 @@ function ensureOverlay() {
         <video playsinline muted autoplay></video>
         <div class="qr-scan-frame" aria-hidden="true"></div>
       </div>
-      <p class="qr-scan-hint muted tiny" data-qr-hint>Giữ mã QR / Code 128 trong khung đến khi nhận</p>
+      <p class="qr-scan-hint muted tiny" data-qr-hint>Giữ mã trong khung đến khi nhận</p>
       <p class="qr-scan-status muted tiny" data-qr-status hidden></p>
     </div>`;
   document.body.appendChild(el);
@@ -63,10 +63,14 @@ async function createBarcodeDetector() {
         formats = BARCODE_FORMATS.filter((f) => supported.includes(f));
       }
     }
-    if (!formats.length) return null;
-    return new window.BarcodeDetector({ formats });
+    if (formats.length) return new window.BarcodeDetector({ formats });
+    return new window.BarcodeDetector();
   } catch {
-    return null;
+    try {
+      return new window.BarcodeDetector();
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -139,22 +143,36 @@ function viewfinderSourceRect(video) {
   return { sx, sy, sw, sh };
 }
 
-function pickCenteredCode(codes, width, height) {
-  if (!codes?.length) return '';
-  const cx = width / 2;
-  const cy = height / 2;
+function codeCenter(code) {
+  const box = code?.boundingBox;
+  if (!box || !Number.isFinite(box.x) || !Number.isFinite(box.y)) return null;
+  return {
+    x: box.x + (Number(box.width) || 0) / 2,
+    y: box.y + (Number(box.height) || 0) / 2,
+  };
+}
+
+/** Ưu tiên mã trong khung; không có tọa độ hoặc lệch hệ tọa độ thì vẫn lấy mã gần tâm. */
+function pickScanValue(codes, video) {
+  const list = (codes || []).filter((c) => String(c?.rawValue || '').trim());
+  if (!list.length) return '';
+  const crop = viewfinderSourceRect(video);
+  const inside = crop
+    ? list.filter((c) => {
+        const p = codeCenter(c);
+        if (!p) return true;
+        return p.x >= crop.sx && p.x <= crop.sx + crop.sw && p.y >= crop.sy && p.y <= crop.sy + crop.sh;
+      })
+    : list;
+  const pool = inside.length ? inside : list;
+  const cx = crop ? crop.sx + crop.sw / 2 : (video.videoWidth || 0) / 2;
+  const cy = crop ? crop.sy + crop.sh / 2 : (video.videoHeight || 0) / 2;
   let best = '';
   let bestD = Infinity;
-  for (const code of codes) {
-    const raw = String(code?.rawValue || '').trim();
-    if (!raw) continue;
-    const box = code.boundingBox;
-    let d = 0;
-    if (box && Number.isFinite(box.x) && Number.isFinite(box.y)) {
-      const bx = box.x + (Number(box.width) || 0) / 2;
-      const by = box.y + (Number(box.height) || 0) / 2;
-      d = (bx - cx) ** 2 + (by - cy) ** 2;
-    }
+  for (const code of pool) {
+    const raw = String(code.rawValue || '').trim();
+    const p = codeCenter(code);
+    const d = p ? (p.x - cx) ** 2 + (p.y - cy) ** 2 : 0;
     if (d < bestD) {
       bestD = d;
       best = raw;
@@ -200,7 +218,7 @@ export function openQrScanner() {
   const hint = overlay.querySelector('[data-qr-hint]');
   const closeBtn = overlay.querySelector('[data-qr-close]');
   overlay.hidden = false;
-  if (hint) hint.textContent = 'Giữ mã QR / Code 128 trong khung đến khi nhận';
+  if (hint) hint.textContent = 'Giữ mã trong khung đến khi nhận';
   setStatus(status, 'Đang mở camera…');
 
   return new Promise(async (resolve) => {
@@ -215,8 +233,6 @@ export function openQrScanner() {
     let lastDone = 0;
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    const small = document.createElement('canvas');
-    const smallCtx = small.getContext('2d', { willReadFrequently: true });
 
     const finish = (value) => {
       if (settled) return;
@@ -249,39 +265,22 @@ export function openQrScanner() {
       if (e.target === overlay) finish(null);
     };
 
-    const drawViewfinder = () => {
-      const crop = viewfinderSourceRect(video);
-      if (!crop) return null;
-      canvas.width = crop.sw;
-      canvas.height = crop.sh;
-      ctx.drawImage(video, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, crop.sw, crop.sh);
-      return crop;
-    };
-
     const scanOnce = async () => {
       if (video.readyState < 2 || !video.videoWidth) return '';
-      const crop = drawViewfinder();
-      if (!crop) return '';
       if (detector) {
-        const codes = await detector.detect(canvas);
-        return pickCenteredCode(codes, canvas.width, canvas.height);
+        const codes = await detector.detect(video);
+        return pickScanValue(codes, video);
       }
       if (!jsQR) return '';
-      const maxW = 960;
-      let srcCanvas = canvas;
-      let srcCtx = ctx;
-      if (canvas.width > maxW) {
-        const scale = maxW / canvas.width;
-        small.width = Math.round(canvas.width * scale);
-        small.height = Math.round(canvas.height * scale);
-        smallCtx.drawImage(canvas, 0, 0, small.width, small.height);
-        srcCanvas = small;
-        srcCtx = smallCtx;
-      }
-      const imageData = srcCtx.getImageData(0, 0, srcCanvas.width, srcCanvas.height);
-      const code = jsQR(imageData.data, srcCanvas.width, srcCanvas.height, {
-        inversionAttempts: 'attemptBoth',
-      });
+      const maxW = 1080;
+      const scale = video.videoWidth > maxW ? maxW / video.videoWidth : 1;
+      const w = Math.max(1, Math.round(video.videoWidth * scale));
+      const h = Math.max(1, Math.round(video.videoHeight * scale));
+      canvas.width = w;
+      canvas.height = h;
+      ctx.drawImage(video, 0, 0, w, h);
+      const imageData = ctx.getImageData(0, 0, w, h);
+      const code = jsQR(imageData.data, w, h, { inversionAttempts: 'attemptBoth' });
       return code?.data ? String(code.data).trim() : '';
     };
 
