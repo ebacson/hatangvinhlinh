@@ -18,7 +18,7 @@
       href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700&family=Sora:wght@600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="css/app.css?v=115" />
+    <link rel="stylesheet" href="css/app.css?v=116" />
   </head>
   <body>
     <div id="boot-screen" class="boot-screen" role="status" aria-live="polite">
@@ -450,7 +450,7 @@
                 <p id="detail-lock-csht" class="sheet-readonly">—</p>
               </div>
             </div>
-            <p class="muted tiny">Chỉ cập nhật mã khóa cửa trạm. Mã CSHT chỉ xem.</p>
+            <p class="muted tiny">Mã khóa lưu theo CSHT (equipment). Một CSHT dùng chung một mã khóa.</p>
           </section>
           <div class="sheet-actions">
             <button type="button" class="btn sheet-save" id="detail-save-lock">Lưu mã khóa</button>
@@ -515,7 +515,7 @@
                 <input id="f-ma-csht" type="text" placeholder="CSHT_QTI_xxxxx" maxlength="64" />
               </div>
               <div class="field">
-                <label for="f-ma-khoa">Mã khóa</label>
+                <label for="f-ma-khoa">Mã khóa (theo CSHT)</label>
                 <input id="f-ma-khoa" type="text" placeholder="VD: 0123" maxlength="40" />
               </div>
               <div class="field field-span">
@@ -568,6 +568,6 @@
       <button type="button" id="update-reload" class="btn update-banner-btn">Cập nhật ngay</button>
     </div>
 
-    <script type="module" src="js/app.js?v=115"></script>
+    <script type="module" src="js/app.js?v=116"></script>
   </body>
 </html>

@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=115';
+} from './config.js?v=116';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=115';
+} from './forecast.js?v=116';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=115';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=115';
+} from './stats.js?v=116';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=116';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -67,8 +67,8 @@ import {
   applyPostefAcquyYearFromSerial,
   findEquipmentSerialConflict,
   isUniqueEquipmentField,
-} from './equipment.js?v=115';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=115';
+} from './equipment.js?v=116';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=116';
 
 
 const app = initializeApp(firebaseConfig);
@@ -292,7 +292,7 @@ function filteredStations() {
       const code = (s.profile.maTram || s.stationKey).toLowerCase();
       const name = (s.profile.tenTram || '').toLowerCase();
       const csht = (s.profile.maCsht || '').toLowerCase();
-      const khoa = (s.profile.maKhoaTram || '').toLowerCase();
+      const khoa = lockCodeForCsht(s.profile.maCsht).toLowerCase();
       return code.includes(q) || name.includes(q) || csht.includes(q) || khoa.includes(q);
     });
   }
@@ -1626,10 +1626,45 @@ function renderDetail() {
   const stationPanel = $('#detail-station-panel');
   const historyPanel = $('#detail-history-panel');
   const isEquipment = state.sheetMode === 'equipment';
-  if ((!state.selectedKey && !isEquipment) || !state.sheetMode) {
+  const isLockByCsht = state.sheetMode === 'lock' && !state.selectedKey && !!(state.selectedCsht || '').trim();
+  if ((!state.selectedKey && !isEquipment && !isLockByCsht) || !state.sheetMode) {
     sheet.hidden = true;
     backdrop.hidden = true;
     stopRunHistoryListener();
+    return;
+  }
+  if (isLockByCsht) {
+    const csht = (state.selectedCsht || '').trim();
+    const site = state.equipmentByCsht[csht] || { maCsht: csht };
+    sheet.hidden = false;
+    backdrop.hidden = false;
+    editPanel.hidden = true;
+    if (lockPanel) lockPanel.hidden = false;
+    if (equipmentPanel) equipmentPanel.hidden = true;
+    if (stationPanel) stationPanel.hidden = true;
+    historyPanel.hidden = true;
+    sheet.setAttribute('aria-label', 'Cập nhật mã khóa');
+    const badge = $('#detail-mode-badge');
+    if (badge) {
+      badge.textContent = 'Mã khóa';
+      badge.classList.toggle('is-history', false);
+      badge.classList.toggle('is-lock', true);
+      badge.classList.toggle('is-equipment', false);
+      badge.classList.toggle('is-station', false);
+    }
+    $('#detail-title').textContent = formatMaTram(site.maTram) || csht;
+    $('#detail-subtitle').textContent = site.tenTram || csht;
+    if (!sheet.dataset.bound || sheet.dataset.key !== csht || sheet.dataset.mode !== 'lock') {
+      const lockInput = $('#f-lock-code');
+      const khoa = lockCodeForCsht(csht);
+      if (lockInput) lockInput.value = khoa;
+      sheet.dataset.initialLock = khoa;
+      sheet.dataset.key = csht;
+      sheet.dataset.mode = 'lock';
+      sheet.dataset.bound = '1';
+    }
+    const cshtEl = $('#detail-lock-csht');
+    if (cshtEl) cshtEl.textContent = csht || '—';
     return;
   }
   if (isEquipment) {
@@ -1756,16 +1791,18 @@ function renderDetail() {
   }
 
   if (isLock) {
+    const csht = String(s.profile.maCsht || '').trim();
+    const khoa = lockCodeForCsht(csht);
     if (!sheet.dataset.bound || sheet.dataset.key !== s.stationKey || sheet.dataset.mode !== 'lock') {
       const lockInput = $('#f-lock-code');
-      if (lockInput) lockInput.value = s.profile.maKhoaTram || '';
-      sheet.dataset.initialLock = String(s.profile.maKhoaTram || '');
+      if (lockInput) lockInput.value = khoa;
+      sheet.dataset.initialLock = khoa;
       sheet.dataset.key = s.stationKey;
       sheet.dataset.mode = 'lock';
       sheet.dataset.bound = '1';
     }
     const cshtEl = $('#detail-lock-csht');
-    if (cshtEl) cshtEl.textContent = s.profile.maCsht || '—';
+    if (cshtEl) cshtEl.textContent = csht || '—';
   }
 
   if (isStation) {
@@ -1776,7 +1813,7 @@ function renderDetail() {
       $('#f-ten-tram').value = s.profile.tenTram || '';
       $('#f-dia-chi').value = s.profile.diaChi || '';
       $('#f-ma-csht').value = s.profile.maCsht || '';
-      $('#f-ma-khoa').value = s.profile.maKhoaTram || '';
+      $('#f-ma-khoa').value = lockCodeForCsht(s.profile.maCsht) || '';
       $('#f-ten-csht').value = s.profile.tenCsht || '';
       $('#f-station-generator').value = s.profile.generatorName || '';
       sheet.dataset.key = s.stationKey;
@@ -1870,7 +1907,6 @@ async function saveStationInfo() {
     tenTram: ($('#f-ten-tram')?.value || '').trim() || null,
     diaChi: ($('#f-dia-chi')?.value || '').trim() || null,
     maCsht: ($('#f-ma-csht')?.value || '').trim() || null,
-    maKhoaTram: ($('#f-ma-khoa')?.value || '').trim() || null,
     tenCsht: ($('#f-ten-csht')?.value || '').trim() || null,
     generatorName: ($('#f-station-generator')?.value || '').trim() || null,
     updatedAt: serverTimestamp(),
@@ -1878,9 +1914,20 @@ async function saveStationInfo() {
     lastEditedByUid: state.user.uid,
     lastEditedAt: serverTimestamp(),
   };
+  const lockNext = ($('#f-ma-khoa')?.value || '').trim();
   try {
     await update(ref(db, `stations/${key}/profile`), updates);
     const csht = String(updates.maCsht || '').trim();
+    if (csht) {
+      await update(ref(db, `equipment/${csht}`), {
+        maCsht: csht,
+        maKhoaTram: lockNext || null,
+        updatedAt: serverTimestamp(),
+        lastEditedBy: who,
+        lastEditedByUid: state.user.uid,
+        lastEditedAt: serverTimestamp(),
+      });
+    }
     if (csht && updates.generatorName) {
       const station = state.stations.find((s) => s.stationKey === key);
       syncMayNoProfileToEquipment(
@@ -1932,8 +1979,17 @@ async function deleteStation(stationKey) {
 }
 
 async function saveLockCode() {
-  const key = state.selectedKey;
-  if (!key || !state.user) return;
+  if (!state.user) return;
+  const station = state.selectedKey
+    ? state.stations.find((x) => x.stationKey === state.selectedKey)
+    : null;
+  const csht = String(
+    state.selectedCsht || station?.profile?.maCsht || ''
+  ).trim();
+  if (!csht) {
+    toast('Thiếu mã CSHT — gắn CSHT trước khi lưu mã khóa');
+    return;
+  }
   const sheet = $('#detail-sheet');
   const lockInput = $('#f-lock-code');
   const next = (lockInput?.value || '').trim();
@@ -1944,7 +2000,8 @@ async function saveLockCode() {
   }
   const who = currentUserLabel();
   try {
-    await update(ref(db, `stations/${key}/profile`), {
+    await update(ref(db, `equipment/${csht}`), {
+      maCsht: csht,
       maKhoaTram: next || null,
       updatedAt: serverTimestamp(),
       lastEditedBy: who,
@@ -1954,6 +2011,7 @@ async function saveLockCode() {
     if (sheet) sheet.dataset.bound = '';
     toast('Đã lưu mã khóa');
     state.selectedKey = null;
+    state.selectedCsht = null;
     state.sheetMode = null;
     render();
   } catch (e) {
@@ -2101,31 +2159,43 @@ function stationsForEquipmentSite(row) {
   });
 }
 
-function equipmentLockRowsHtml(row) {
-  const stations = stationsForEquipmentSite(row);
-  if (!stations.length) {
-    return `<div class="station-kv-row">
-      <span class="station-kv-l">Mã khóa</span>
-      <strong class="station-kv-v">—</strong>
-    </div>`;
+function lockCodeForCsht(maCsht) {
+  const key = String(maCsht || '').trim();
+  if (!key) return '';
+  return String(state.equipmentByCsht?.[key]?.maKhoaTram || '').trim();
+}
+
+function openLockSheet(maCsht) {
+  const csht = String(maCsht || '').trim();
+  if (!csht) {
+    toast('Thiếu mã CSHT — không cập nhật được mã khóa');
+    return;
   }
-  const many = stations.length > 1;
-  return stations
-    .map((s) => {
-      const code = formatMaTram(s.profile.maTram || s.stationKey);
-      const maKhoa = (s.profile.maKhoaTram || '').trim();
-      const label = many && code ? `Mã khóa · ${code}` : 'Mã khóa';
-      return `<div class="station-kv-row station-kv-action">
-        <div class="station-kv-text">
-          <span class="station-kv-l">${escapeHtml(label)}</span>
-          <strong class="station-kv-v">${escapeHtml(maKhoa || '—')}</strong>
-        </div>
-        <button type="button" class="btn-outline station-action-btn" data-action="lock" data-key="${escapeAttr(
-          s.stationKey
-        )}">Cập nhật MK</button>
-      </div>`;
-    })
-    .join('');
+  state.selectedCsht = csht;
+  state.selectedKey = null;
+  state.sheetMode = 'lock';
+  const sheet = $('#detail-sheet');
+  if (sheet) {
+    sheet.dataset.bound = '';
+    sheet.dataset.mode = 'lock';
+    sheet.dataset.key = csht;
+  }
+  stopRunHistoryListener();
+  render();
+}
+
+function equipmentLockRowsHtml(row) {
+  const csht = String(row?.maCsht || '').trim();
+  const maKhoa = lockCodeForCsht(csht) || String(row?.site?.maKhoaTram || '').trim();
+  return `<div class="station-kv-row station-kv-action">
+      <div class="station-kv-text">
+        <span class="station-kv-l">Mã khóa</span>
+        <strong class="station-kv-v">${escapeHtml(maKhoa || '—')}</strong>
+      </div>
+      <button type="button" class="btn-outline station-action-btn" data-action="lock" data-csht="${escapeAttr(
+        csht
+      )}">Cập nhật MK</button>
+    </div>`;
 }
 
 /** Thiết bị cùng loại ở các CSHT khác — dùng để chặn trùng serial. */
@@ -2366,7 +2436,8 @@ function filteredEquipmentSites() {
   const matched = !q
     ? rows
     : rows.filter((r) => {
-        const hay = `${r.maCsht} ${r.maTram} ${r.maTrams.join(' ')} ${r.tenTram}`.toLowerCase();
+        const khoa = lockCodeForCsht(r.maCsht);
+        const hay = `${r.maCsht} ${r.maTram} ${r.maTrams.join(' ')} ${r.tenTram} ${khoa}`.toLowerCase();
         return hay.includes(q);
       });
   return applyEquipmentNearestFilter(matched);
@@ -2384,13 +2455,14 @@ function exportEquipmentExcel() {
   sheets.push({
     name: 'Danh sách CSHT',
     rows: [
-      ['STT', 'Mã CSHT', 'Mã trạm', 'Các mã trạm', 'Tên trạm', 'LAT', 'LONG'],
+      ['STT', 'Mã CSHT', 'Mã trạm', 'Các mã trạm', 'Tên trạm', 'Mã khóa', 'LAT', 'LONG'],
       ...list.map((r, i) => [
         i + 1,
         r.maCsht,
         r.maTram || '',
         (r.maTrams || []).join(', '),
         r.tenTram || '',
+        r.site?.maKhoaTram || '',
         r.lat,
         r.long,
       ]),
@@ -3230,11 +3302,11 @@ function bindEvents() {
     }
   });
   $('#equipment-list')?.addEventListener('click', (e) => {
-    const lockBtn = e.target.closest('[data-action="lock"][data-key]');
+    const lockBtn = e.target.closest('[data-action="lock"][data-csht]');
     if (lockBtn) {
       e.preventDefault();
       e.stopPropagation();
-      openStationSheet(lockBtn.dataset.key, 'lock');
+      openLockSheet(lockBtn.dataset.csht);
       return;
     }
     const dirBtn = e.target.closest('[data-action="eq-directions"][data-csht]');
