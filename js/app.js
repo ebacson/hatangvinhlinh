@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=117';
+} from './config.js?v=118';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=117';
+} from './forecast.js?v=118';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=117';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=117';
+} from './stats.js?v=118';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=118';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -67,8 +67,8 @@ import {
   applyPostefAcquyYearFromSerial,
   findEquipmentSerialConflict,
   isUniqueEquipmentField,
-} from './equipment.js?v=117';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=117';
+} from './equipment.js?v=118';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=118';
 
 
 const app = initializeApp(firebaseConfig);
@@ -1713,7 +1713,11 @@ function renderDetail() {
         .join(' · ') || '—';
     const saveBtn = $('#detail-save-equipment');
     if (saveBtn) saveBtn.textContent = isAdd ? 'Lưu thiết bị mới' : 'Lưu thay đổi';
-    renderEquipmentEditor(csht, true);
+    // Đang quét mã: không rebuild form (tránh mất giá trị / ô input bị detach).
+    if (isQrScannerOpen()) return;
+    // Giữ nội dung đang gõ khi RTDB tick → render lại.
+    captureEquipmentFormIntoDraft();
+    renderEquipmentEditor(csht, false);
     return;
   }
   const s = state.stations.find((x) => x.stationKey === state.selectedKey);
@@ -3462,17 +3466,36 @@ function bindEvents() {
     if (!btn) return;
     const key = btn.getAttribute('data-eq-qr');
     if (!key) return;
-    const input = $(`#eq-f-${CSS.escape(key)}`) || $(`[data-eq-key="${CSS.escape(key)}"]`);
-    if (!input) return;
+    const findField = () =>
+      $(`#eq-f-${CSS.escape(key)}`) ||
+      $('#eq-fields')?.querySelector(`[data-eq-key="${CSS.escape(key)}"]`);
+    if (!findField()) return;
     btn.disabled = true;
     try {
       const raw = await openQrScanner();
-      if (raw) {
+      if (!raw) return;
+      // Ghi draft trước — lúc mở camera RTDB có thể render lại và detach ô cũ.
+      if (equipmentDraft) {
+        const typeId = equipmentDraft.typeId;
+        const list = [...(equipmentDraft.byType[typeId] || [])];
+        while (list.length <= equipmentDraft.index) list.push({});
+        let cur = { ...(list[equipmentDraft.index] || {}), [key]: raw };
+        if (typeId === 'binh_acquy') {
+          cur = applyPostefAcquyYearFromSerial(applyBinhAcquyInferredFields(cur));
+        }
+        list[equipmentDraft.index] = cur;
+        equipmentDraft.byType[typeId] = list;
+        equipmentDraft.dirty = true;
+        renderEquipmentEditor(equipmentDraft.maCsht, true);
+      }
+      const input = findField();
+      if (input) {
         input.value = raw;
         input.dispatchEvent(new Event('input', { bubbles: true }));
-        toast('Đã quét serial từ mã');
-        input.focus();
+        captureEquipmentFormIntoDraft();
+        input.focus({ preventScroll: true });
       }
+      toast('Đã quét serial từ mã');
     } finally {
       btn.disabled = false;
     }
