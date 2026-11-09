@@ -38,7 +38,7 @@ function ensureOverlay() {
         <video playsinline muted autoplay></video>
         <div class="qr-scan-frame" aria-hidden="true"></div>
       </div>
-      <p class="qr-scan-hint muted tiny" data-qr-hint>Đưa sát mã vạch hoặc QR nhỏ, giữ ngang trong khung</p>
+        <p class="qr-scan-hint muted tiny" data-qr-hint>Đưa mã vào khung — camera tự lấy nét. Chạm màn hình để lấy nét lại.</p>
       <p class="qr-scan-status muted tiny" data-qr-status hidden></p>
     </div>`;
   document.body.appendChild(el);
@@ -93,6 +93,52 @@ function stopStream(stream) {
   for (const track of stream.getTracks()) track.stop();
 }
 
+/** Bật lấy nét liên tục + ưu tiên vùng giữa khung (tem/serial gần). */
+async function enableContinuousAutofocus(track, point) {
+  if (!track?.applyConstraints) return false;
+  const caps = typeof track.getCapabilities === 'function' ? track.getCapabilities() || {} : {};
+  const modes = Array.isArray(caps.focusMode) ? caps.focusMode : [];
+  const poi =
+    point && Number.isFinite(point.x) && Number.isFinite(point.y)
+      ? [{ x: Math.min(1, Math.max(0, point.x)), y: Math.min(1, Math.max(0, point.y)) }]
+      : [{ x: 0.5, y: 0.5 }];
+
+  const advanced = {};
+  if (modes.includes('continuous')) advanced.focusMode = 'continuous';
+  else if (modes.includes('single-shot')) advanced.focusMode = 'single-shot';
+  if (caps.pointsOfInterest) advanced.pointsOfInterest = poi;
+
+  // Tem thiết bị thường cách ống kính ~10–25cm — ưu tiên nét gần nếu máy cho chỉnh.
+  if (caps.focusDistance && typeof caps.focusDistance === 'object') {
+    const min = Number(caps.focusDistance.min);
+    const max = Number(caps.focusDistance.max);
+    if (Number.isFinite(min) && Number.isFinite(max) && max > min) {
+      advanced.focusDistance = min + (max - min) * 0.18;
+    }
+  }
+
+  const tries = [];
+  if (Object.keys(advanced).length) {
+    tries.push({ advanced: [advanced] });
+    if (advanced.focusMode) tries.push({ focusMode: advanced.focusMode });
+  } else {
+    tries.push({ advanced: [{ focusMode: 'continuous' }] });
+    tries.push({ focusMode: 'continuous' });
+  }
+
+  let ok = false;
+  for (const c of tries) {
+    try {
+      await track.applyConstraints(c);
+      ok = true;
+      break;
+    } catch {
+      /* thử constraint khác */
+    }
+  }
+  return ok;
+}
+
 async function openCamera() {
   const attempts = [
     {
@@ -101,6 +147,7 @@ async function openCamera() {
         facingMode: { ideal: 'environment' },
         width: { ideal: 1920 },
         height: { ideal: 1080 },
+        focusMode: { ideal: 'continuous' },
       },
     },
     {
@@ -109,7 +156,12 @@ async function openCamera() {
         facingMode: { ideal: 'environment' },
         width: { ideal: 1280 },
         height: { ideal: 720 },
+        focusMode: { ideal: 'continuous' },
       },
+    },
+    {
+      audio: false,
+      video: { facingMode: { ideal: 'environment' } },
     },
   ];
   let lastErr = null;
@@ -117,14 +169,7 @@ async function openCamera() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       const track = stream.getVideoTracks()[0];
-      try {
-        const caps = track?.getCapabilities?.() || {};
-        if (Array.isArray(caps.focusMode) && caps.focusMode.includes('continuous')) {
-          await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
-        }
-      } catch {
-        /* máy không cho chỉnh nét — vẫn quét */
-      }
+      await enableContinuousAutofocus(track);
       return stream;
     } catch (err) {
       lastErr = err;
@@ -224,8 +269,11 @@ export function closeQrScanner() {
 
 function cleanupActive() {
   if (!active) return;
-  const { overlay, stream, raf, video } = active;
+  const { overlay, stream, raf, video, focusTimer, onTapFocus } = active;
   if (raf) cancelAnimationFrame(raf);
+  if (focusTimer) clearInterval(focusTimer);
+  const wrap = overlay?.querySelector?.('.qr-scan-video-wrap');
+  if (wrap && onTapFocus) wrap.removeEventListener('click', onTapFocus);
   stopStream(stream);
   if (video) {
     video.pause();
@@ -247,13 +295,16 @@ export function openQrScanner() {
   const hint = overlay.querySelector('[data-qr-hint]');
   const closeBtn = overlay.querySelector('[data-qr-close]');
   overlay.hidden = false;
-  if (hint) hint.textContent = 'Đưa sát mã vạch hoặc QR nhỏ, giữ ngang trong khung';
+  if (hint) {
+    hint.textContent = 'Đưa mã vào khung — camera tự lấy nét. Chạm màn hình để lấy nét lại.';
+  }
   setStatus(status, 'Đang mở camera…');
 
   return new Promise(async (resolve) => {
     let settled = false;
     let stream = null;
     let raf = 0;
+    let focusTimer = 0;
     let detector = null;
     let jsQR = null;
     const jsQRReady = loadJsQR()
@@ -287,11 +338,30 @@ export function openQrScanner() {
       if (streak >= CONFIRM_HITS) finish(value);
     };
 
+    const videoWrap = overlay.querySelector('.qr-scan-video-wrap');
+    const onTapFocus = (e) => {
+      e.stopPropagation();
+      const track = stream?.getVideoTracks?.()[0];
+      if (!track || !videoWrap) return;
+      const rect = videoWrap.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      const x = (e.clientX - rect.left) / rect.width;
+      const y = (e.clientY - rect.top) / rect.height;
+      enableContinuousAutofocus(track, { x, y }).then((ok) => {
+        if (!settled) setStatus(status, ok ? 'Đang lấy nét…' : '');
+        if (ok) setTimeout(() => {
+          if (!settled) setStatus(status, '');
+        }, 700);
+      });
+    };
+
     active = {
       overlay,
       stream: null,
       video,
       raf: 0,
+      focusTimer: 0,
+      onTapFocus,
       settle: finish,
     };
 
@@ -299,6 +369,7 @@ export function openQrScanner() {
     overlay.onclick = (e) => {
       if (e.target === overlay) finish(null);
     };
+    if (videoWrap) videoWrap.addEventListener('click', onTapFocus);
 
     const rawValues = (codes) =>
       (codes || []).map((c) => String(c?.rawValue || '').trim()).filter(Boolean);
@@ -364,6 +435,14 @@ export function openQrScanner() {
       if (active) active.stream = stream;
       video.srcObject = stream;
       await video.play();
+      const track = stream.getVideoTracks()[0];
+      await enableContinuousAutofocus(track);
+      // Một số máy Android khóa nét sau vài giây — nhắc continuous + điểm giữa khung.
+      focusTimer = window.setInterval(() => {
+        if (settled) return;
+        enableContinuousAutofocus(stream?.getVideoTracks?.()[0]);
+      }, 1800);
+      if (active) active.focusTimer = focusTimer;
       setStatus(status, '');
 
       const tick = async () => {
