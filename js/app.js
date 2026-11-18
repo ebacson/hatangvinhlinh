@@ -29,7 +29,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=122';
+} from './config.js?v=123';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -37,15 +37,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=122';
+} from './forecast.js?v=123';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=122';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=122';
+} from './stats.js?v=123';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=123';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -74,8 +74,8 @@ import {
   diffRemovedEquipmentDevices,
   equipmentKhoSnippet,
   sortEquipmentHistoryEntries,
-} from './equipment.js?v=122';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=122';
+} from './equipment.js?v=123';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=123';
 
 
 const app = initializeApp(firebaseConfig);
@@ -2412,7 +2412,7 @@ function renderEquipmentInventoryHtml(site, maCsht) {
             )}" data-type="${escapeAttr(t.id)}" data-index="${i}">Sửa</button>
             <button type="button" class="btn-text danger" data-action="eq-delete" data-csht="${escapeAttr(
               maCsht
-            )}" data-type="${escapeAttr(t.id)}" data-index="${i}">Xóa</button>
+            )}" data-type="${escapeAttr(t.id)}" data-index="${i}">Vào Kho</button>
           </div>
         </div>`;
       })
