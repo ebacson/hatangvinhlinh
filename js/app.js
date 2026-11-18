@@ -29,7 +29,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=127';
+} from './config.js?v=128';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -37,15 +37,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=127';
+} from './forecast.js?v=128';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=127';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=127';
+} from './stats.js?v=128';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=128';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -74,8 +74,8 @@ import {
   diffRemovedEquipmentDevices,
   equipmentKhoSnippet,
   sortEquipmentHistoryEntries,
-} from './equipment.js?v=127';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=127';
+} from './equipment.js?v=128';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=128';
 
 
 const app = initializeApp(firebaseConfig);
@@ -3730,16 +3730,19 @@ function bindEvents() {
     }
     const btn = e.target.closest('[data-action="kho-restore"][data-kho-id]');
     if (!btn) return;
-    const card = btn.closest('[data-kho-id]');
+    // Không dùng closest('[data-kho-id]') — chính nút cũng có attr này nên không thấy ô CSHT.
+    const card = btn.closest('.equipment-kho-card');
     const cshtInput = card?.querySelector('.kho-restore-csht');
-    const csht = String(cshtInput?.value || '').trim();
+    const khoId = btn.dataset.khoId;
+    const row = state.equipmentKho?.[khoId];
+    const csht = String(cshtInput?.value || row?.fromCsht || '').trim();
     if (!csht) {
       toast('Nhập mã CSHT để khôi phục');
       cshtInput?.focus();
       return;
     }
     if (!confirm(`Khôi phục thiết bị về ${csht}?`)) return;
-    restoreKhoDevice(btn.dataset.khoId, csht);
+    restoreKhoDevice(khoId, csht);
   });
   $('#equipment-find-input')?.addEventListener('input', (e) => {
     state.equipmentFindQuery = e.target.value;
