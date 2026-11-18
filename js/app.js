@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=118';
+} from './config.js?v=119';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=118';
+} from './forecast.js?v=119';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=118';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=118';
+} from './stats.js?v=119';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=119';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -67,8 +67,8 @@ import {
   applyPostefAcquyYearFromSerial,
   findEquipmentSerialConflict,
   isUniqueEquipmentField,
-} from './equipment.js?v=118';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=118';
+} from './equipment.js?v=119';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=119';
 
 
 const app = initializeApp(firebaseConfig);
@@ -2519,30 +2519,78 @@ function equipmentSearchSnippet(typeDef, device) {
   return [brand, model, serial].filter(Boolean).join(' · ') || 'Chưa có thông số';
 }
 
+function equipmentSearchScore(query, qCompact, typeDef, device, site, maCsht) {
+  const serial = String(
+    device?.serial || device?.serial_dan_lanh || device?.serial_dan_nong || ''
+  )
+    .trim()
+    .toLowerCase();
+  const serialCompact = serial.replace(/\s+/g, '');
+  const brand = String(
+    device?.hang_san_xuat || device?.hang_san_xuat_thiet_bi || device?.nha_san_xuat || ''
+  )
+    .trim()
+    .toLowerCase();
+  const model = String(device?.model || '')
+    .trim()
+    .toLowerCase();
+  const maTram = String(formatMaTram(site?.maTram) || '').toLowerCase();
+  const ten = String(site?.tenTram || '').toLowerCase();
+  const csht = String(maCsht || '').toLowerCase();
+
+  let score = 0;
+  if (serialCompact && serialCompact === qCompact) score += 1000;
+  else if (serialCompact && serialCompact.includes(qCompact)) score += 600;
+  else if (serial && serial.includes(query)) score += 500;
+  if (model && (model === query || model.replace(/\s+/g, '') === qCompact)) score += 300;
+  else if (model && (model.includes(query) || model.replace(/\s+/g, '').includes(qCompact))) score += 180;
+  if (brand && (brand === query || brand.includes(query))) score += 120;
+  if (maTram && (maTram.includes(query) || maTram.replace(/\s+/g, '').includes(qCompact))) score += 90;
+  if (csht && csht.includes(query)) score += 70;
+  if (ten && ten.includes(query)) score += 40;
+  if (String(typeDef?.title || '')
+    .toLowerCase()
+    .includes(query)) {
+    score += 20;
+  }
+  return score;
+}
+
 function searchEquipmentDevices(query) {
   const q = String(query || '').trim().toLowerCase();
   const qCompact = q.replace(/\s+/g, '');
   if (qCompact.length < 2) return [];
   const hits = [];
   for (const [maCsht, site] of Object.entries(state.equipmentByCsht || {})) {
+    const siteBlob = `${maCsht} ${site?.maTram || ''} ${(site?.maTrams || []).join(' ')} ${
+      site?.tenTram || ''
+    }`.toLowerCase();
+    const siteCompact = siteBlob.replace(/\s+/g, '');
     const norm = normalizeEquipment(site);
     for (const typeDef of equipmentTypes()) {
       const devices = norm[typeDef.id] || [];
       devices.forEach((device, index) => {
-        const parts = (typeDef.fields || []).map((f) => device?.[f.key]).filter((v) => v != null && String(v).trim() !== '');
-        const blob = `${typeDef.title} ${parts.join(' ')}`.toLowerCase();
+        const parts = (typeDef.fields || [])
+          .map((f) => device?.[f.key])
+          .filter((v) => v != null && String(v).trim() !== '');
+        const blob = `${typeDef.title} ${parts.join(' ')} ${siteBlob}`.toLowerCase();
         const compact = blob.replace(/\s+/g, '');
-        if (!blob.includes(q) && !compact.includes(qCompact)) return;
-        hits.push({ maCsht, site, typeDef, index, device });
+        if (!blob.includes(q) && !compact.includes(qCompact) && !siteCompact.includes(qCompact)) {
+          return;
+        }
+        const score = equipmentSearchScore(q, qCompact, typeDef, device, site, maCsht);
+        hits.push({ maCsht, site, typeDef, index, device, score });
       });
     }
   }
+  // Rank by relevance first — tránh slice(0, N) sau sort mã trạm chỉ còn GLH (G < V).
   hits.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
     const ac = formatMaTram(a.site?.maTram) || a.maCsht;
     const bc = formatMaTram(b.site?.maTram) || b.maCsht;
     return ac.localeCompare(bc, 'vi') || a.typeDef.title.localeCompare(b.typeDef.title, 'vi') || a.index - b.index;
   });
-  return hits.slice(0, 40);
+  return { hits: hits.slice(0, 80), total: hits.length };
 }
 
 function renderEquipmentFind() {
@@ -2563,26 +2611,32 @@ function renderEquipmentFind() {
     results.innerHTML = `<p class="muted tiny">Nhập ít nhất 2 ký tự: serial, hãng hoặc model.</p>`;
     return;
   }
-  const hits = searchEquipmentDevices(q);
+  const { hits, total } = searchEquipmentDevices(q);
   if (!hits.length) {
     results.innerHTML = `<p class="muted tiny">Không thấy thiết bị khớp.</p>`;
     return;
   }
-  results.innerHTML = hits
-    .map((hit) => {
-      const code = formatMaTram(hit.site?.maTram) || hit.maCsht;
-      const name = hit.site?.tenTram ? ` · ${hit.site.tenTram}` : '';
-      const snippet = equipmentSearchSnippet(hit.typeDef, hit.device);
-      return `<button type="button" class="equipment-find-hit" data-find-csht="${escapeAttr(
-        hit.maCsht
-      )}" data-find-type="${escapeAttr(hit.typeDef.id)}" data-find-index="${hit.index}">
+  const more =
+    total > hits.length
+      ? `<p class="muted tiny">Hiển thị ${hits.length}/${total} — gõ serial/mã trạm cụ thể hơn để hẹp kết quả.</p>`
+      : `<p class="muted tiny">${total} kết quả</p>`;
+  results.innerHTML =
+    more +
+    hits
+      .map((hit) => {
+        const code = formatMaTram(hit.site?.maTram) || hit.maCsht;
+        const name = hit.site?.tenTram ? ` · ${hit.site.tenTram}` : '';
+        const snippet = equipmentSearchSnippet(hit.typeDef, hit.device);
+        return `<button type="button" class="equipment-find-hit" data-find-csht="${escapeAttr(
+          hit.maCsht
+        )}" data-find-type="${escapeAttr(hit.typeDef.id)}" data-find-index="${hit.index}">
         <strong>${escapeHtml(code)}${escapeHtml(name)}</strong>
         <span>${escapeHtml(hit.typeDef.title)} · ${escapeHtml(equipmentUnitOptionLabel(hit.typeDef.id, hit.index))} · ${escapeHtml(
           snippet
         )}</span>
       </button>`;
-    })
-    .join('');
+      })
+      .join('');
 }
 
 function renderEquipmentList() {
