@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=120';
+} from './config.js?v=121';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=120';
+} from './forecast.js?v=121';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=120';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=120';
+} from './stats.js?v=121';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=121';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -67,8 +67,8 @@ import {
   applyPostefAcquyYearFromSerial,
   findEquipmentSerialConflict,
   isUniqueEquipmentField,
-} from './equipment.js?v=120';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=120';
+} from './equipment.js?v=121';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=121';
 
 
 const app = initializeApp(firebaseConfig);
@@ -2938,12 +2938,38 @@ function renderEquipmentEditor(csht, forceFields = false) {
   fillKindSelect(equipmentDraft.typeId, '');
 }
 
+/** Khi đang Thêm TB: chọn/ tạo slot trống tiếp theo của loại (Máy nắn 2…), không nhảy về máy đã có. */
+function ensureNextAddSlotForType(typeId) {
+  if (!equipmentDraft || !typeId) return;
+  let list = [...(equipmentDraft.byType[typeId] || [])];
+  const last = list[list.length - 1];
+  if (list.length && last && !countEquipmentDataFields(last)) {
+    equipmentDraft.index = list.length - 1;
+  } else {
+    list.push({});
+    equipmentDraft.index = list.length - 1;
+  }
+  equipmentDraft.byType[typeId] = list;
+  equipmentDraft.mode = 'add';
+  const fields = $('#eq-fields');
+  if (fields) fields.dataset.stamp = '';
+}
+
 function onEquipmentTypeChange() {
   captureEquipmentFormIntoDraft();
   if (!equipmentDraft) return;
-  equipmentDraft.typeId = $('#eq-type')?.value || equipmentDraft.typeId;
-  equipmentDraft.index = 0;
+  const typeId = $('#eq-type')?.value || equipmentDraft.typeId;
+  equipmentDraft.typeId = typeId;
+  if (equipmentDraft.mode === 'add') {
+    ensureNextAddSlotForType(typeId);
+  } else {
+    equipmentDraft.index = 0;
+  }
   renderEquipmentEditor(equipmentDraft.maCsht, true);
+  const saveBtn = $('#detail-save-equipment');
+  if (saveBtn && equipmentDraft.mode === 'add') saveBtn.textContent = 'Lưu thiết bị mới';
+  const badge = $('#detail-mode-badge');
+  if (badge && equipmentDraft.mode === 'add') badge.textContent = 'Thêm TB';
 }
 
 function onEquipmentIndexChange() {
