@@ -29,7 +29,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=123';
+} from './config.js?v=124';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -37,15 +37,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=123';
+} from './forecast.js?v=124';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=123';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=123';
+} from './stats.js?v=124';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=124';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -74,8 +74,8 @@ import {
   diffRemovedEquipmentDevices,
   equipmentKhoSnippet,
   sortEquipmentHistoryEntries,
-} from './equipment.js?v=123';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=123';
+} from './equipment.js?v=124';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=124';
 
 
 const app = initializeApp(firebaseConfig);
@@ -2631,7 +2631,16 @@ function renderEquipmentKho() {
   const listEl = $('#equipment-list');
   const empty = $('#equipment-empty');
   const findPanel = $('#equipment-find');
-  if (btn) btn.classList.toggle('is-active', !!state.equipmentKhoOpen);
+  const canSeeKho = isRootUser();
+  if (btn) {
+    btn.hidden = !canSeeKho;
+    btn.classList.toggle('is-active', !!(canSeeKho && state.equipmentKhoOpen));
+  }
+  if (!canSeeKho) {
+    state.equipmentKhoOpen = false;
+    if (panel) panel.hidden = true;
+    return;
+  }
   if (panel) panel.hidden = !state.equipmentKhoOpen;
   if (!state.equipmentKhoOpen) return;
   if (findPanel) findPanel.hidden = true;
@@ -3386,6 +3395,10 @@ async function deleteEquipmentDeviceDirect(maCsht, typeId, index) {
 }
 
 async function restoreKhoDevice(khoId, targetCsht) {
+  if (!isRootUser()) {
+    toast('Chỉ root được khôi phục từ Kho');
+    return;
+  }
   const id = String(khoId || '').trim();
   const csht = String(targetCsht || '').trim();
   const row = state.equipmentKho?.[id];
@@ -3618,16 +3631,25 @@ function bindEvents() {
     if (state.equipmentFindOpen) $('#equipment-find-input')?.focus();
   });
   $('#equipment-kho-btn')?.addEventListener('click', () => {
+    if (!isRootUser()) {
+      toast('Chỉ root xem được Kho');
+      return;
+    }
     state.equipmentKhoOpen = !state.equipmentKhoOpen;
     if (state.equipmentKhoOpen) state.equipmentFindOpen = false;
     render();
     if (state.equipmentKhoOpen) $('#equipment-kho-search')?.focus();
   });
   $('#equipment-kho-search')?.addEventListener('input', (e) => {
+    if (!isRootUser()) return;
     state.equipmentKhoQuery = e.target.value;
     renderEquipmentKho();
   });
   $('#equipment-kho-list')?.addEventListener('click', (e) => {
+    if (!isRootUser()) {
+      toast('Chỉ root được khôi phục từ Kho');
+      return;
+    }
     const btn = e.target.closest('[data-action="kho-restore"][data-kho-id]');
     if (!btn) return;
     const card = btn.closest('[data-kho-id]');
