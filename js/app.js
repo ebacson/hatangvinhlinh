@@ -29,7 +29,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=124';
+} from './config.js?v=125';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -37,15 +37,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=124';
+} from './forecast.js?v=125';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=124';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=124';
+} from './stats.js?v=125';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=125';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -74,8 +74,8 @@ import {
   diffRemovedEquipmentDevices,
   equipmentKhoSnippet,
   sortEquipmentHistoryEntries,
-} from './equipment.js?v=124';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=124';
+} from './equipment.js?v=125';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=125';
 
 
 const app = initializeApp(firebaseConfig);
@@ -2412,7 +2412,7 @@ function renderEquipmentInventoryHtml(site, maCsht) {
             )}" data-type="${escapeAttr(t.id)}" data-index="${i}">Sửa</button>
             <button type="button" class="btn-text danger" data-action="eq-delete" data-csht="${escapeAttr(
               maCsht
-            )}" data-type="${escapeAttr(t.id)}" data-index="${i}">Vào Kho</button>
+            )}" data-type="${escapeAttr(t.id)}" data-index="${i}">Thu hồi</button>
           </div>
         </div>`;
       })
@@ -2677,7 +2677,7 @@ function renderEquipmentKho() {
         .map((h) => {
           const action =
             h.action === 'moved_to_kho'
-              ? 'Vào Kho'
+              ? 'Thu hồi'
               : h.action === 'restored'
                 ? 'Khôi phục'
                 : h.action === 'created'
@@ -3287,14 +3287,14 @@ function deleteEquipmentDeviceFromDraft() {
     return;
   }
   const unit = equipmentUnitOptionLabel(equipmentDraft.typeId, equipmentDraft.index);
-  if (!confirm(`Chuyển ${unit} vào Kho?\n(Không xóa hẳn — sẽ lưu khi bấm Lưu thiết bị)`)) return;
+  if (!confirm(`Thu hồi ${unit}?\nThiết bị vào Kho khi bấm Lưu thiết bị.`)) return;
   list.splice(equipmentDraft.index, 1);
   equipmentDraft.byType[equipmentDraft.typeId] = list;
   if (!list.length) list.push({});
   equipmentDraft.index = Math.min(equipmentDraft.index, list.length - 1);
   equipmentDraft.dirty = true;
   renderEquipmentEditor(equipmentDraft.maCsht, true);
-  toast('Đã đưa khỏi form — nhớ Lưu để chuyển vào Kho');
+  toast('Đã thu hồi khỏi form — nhớ Lưu thiết bị');
 }
 
 /** Đưa thiết bị vào Kho (RTDB equipmentKho/{id}), kèm lịch sử. */
@@ -3359,7 +3359,7 @@ async function deleteEquipmentDeviceDirect(maCsht, typeId, index) {
     return;
   }
   const unit = equipmentUnitOptionLabel(typeId, index);
-  if (!confirm(`Chuyển ${unit} vào Kho?\nThiết bị và lịch sử được giữ lại, không xóa hẳn.`)) return;
+  if (!confirm(`Thu hồi ${unit}?\nThiết bị và lịch sử được chuyển vào Kho, không xóa hẳn.`)) return;
   const removed = devices[index];
   devices.splice(index, 1);
   const who = currentUserLabel();
@@ -3387,10 +3387,10 @@ async function deleteEquipmentDeviceDirect(maCsht, typeId, index) {
         source: 'manual',
       },
     });
-    toast(`Đã chuyển ${unit} vào Kho`);
+    toast(`Đã thu hồi ${unit} vào Kho`);
     render();
   } catch (e) {
-    toast('Chuyển Kho thất bại: ' + (e.message || e));
+    toast('Thu hồi thất bại: ' + (e.message || e));
   }
 }
 
