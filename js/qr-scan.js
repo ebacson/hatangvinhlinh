@@ -15,9 +15,12 @@ const BARCODE_FORMATS = [
   'pdf417',
   'aztec',
 ];
-/** Hai lần đọc giống nhau, cách nhau một nhịp, mới nhận — tránh khung mờ ra sai. */
-const CONFIRM_HITS = 2;
-const SCAN_GAP_MS = 140;
+/** Một lần đọc ổn là nhận; mã rất ngắn (<6) vẫn cần 2 lần để giảm đọc nhầm. */
+const CONFIRM_HITS = 1;
+const CONFIRM_HITS_SHORT = 2;
+const SHORT_CODE_LEN = 6;
+/** Quét dày hơn — khoảng cách tối thiểu giữa hai vòng detect. */
+const SCAN_GAP_MS = 55;
 
 let active = null;
 
@@ -335,7 +338,8 @@ export function openQrScanner() {
         lastValue = value;
         streak = 1;
       }
-      if (streak >= CONFIRM_HITS) finish(value);
+      const need = value.length < SHORT_CODE_LEN ? CONFIRM_HITS_SHORT : CONFIRM_HITS;
+      if (streak >= need) finish(value);
     };
 
     const videoWrap = overlay.querySelector('.qr-scan-video-wrap');
@@ -374,15 +378,15 @@ export function openQrScanner() {
     const rawValues = (codes) =>
       (codes || []).map((c) => String(c?.rawValue || '').trim()).filter(Boolean);
 
-    /** Phóng vùng giữa khung để vạch mỏng / QR nhỏ đủ điểm ảnh. */
+    /** Phóng vùng giữa khung — chỉ dùng khi detect video chưa ra kết quả. */
     const drawZoomedViewfinder = () => {
       const crop = viewfinderSourceRect(video, 0.08);
       if (!crop) return false;
-      const scale = Math.min(3, 1600 / crop.sw);
+      const scale = Math.min(2.2, 1280 / crop.sw);
       canvas.width = Math.max(1, Math.round(crop.sw * scale));
       canvas.height = Math.max(1, Math.round(crop.sh * scale));
       ctx.imageSmoothingEnabled = false;
-      ctx.filter = 'contrast(1.35)';
+      ctx.filter = 'contrast(1.28)';
       ctx.drawImage(video, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, canvas.width, canvas.height);
       ctx.filter = 'none';
       return true;
@@ -391,20 +395,26 @@ export function openQrScanner() {
     const scanOnce = async () => {
       if (video.readyState < 2 || !video.videoWidth) return '';
       const values = [];
+      // 1) Detect trực tiếp từ video — nhanh nhất.
       if (detector) {
         try {
-          values.push(pickScanValue(await detector.detect(video), video));
+          const hit = preferSerial([pickScanValue(await detector.detect(video), video)]);
+          if (hit) return hit;
         } catch {
-          /* thử ảnh phóng to */
+          /* thử canvas */
         }
+        // 2) Chỉ khi chưa có kết quả mới crop/phóng + detect lại.
         if (drawZoomedViewfinder()) {
           try {
             values.push(...rawValues(await detector.detect(canvas)));
+            const hit = preferSerial(values);
+            if (hit) return hit;
           } catch {
             /* canvas không đọc được trên một số máy */
           }
         }
       }
+      // 3) jsQR chỉ là fallback (chủ yếu QR) khi native chưa ra.
       if (!jsQR) jsQR = await jsQRReady;
       if (jsQR && drawZoomedViewfinder()) {
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -437,11 +447,11 @@ export function openQrScanner() {
       await video.play();
       const track = stream.getVideoTracks()[0];
       await enableContinuousAutofocus(track);
-      // Một số máy Android khóa nét sau vài giây — nhắc continuous + điểm giữa khung.
+      // Nhắc AF thưa hơn — tránh giật nét làm chậm lúc đang đọc mã.
       focusTimer = window.setInterval(() => {
         if (settled) return;
         enableContinuousAutofocus(stream?.getVideoTracks?.()[0]);
-      }, 1800);
+      }, 3500);
       if (active) active.focusTimer = focusTimer;
       setStatus(status, '');
 
