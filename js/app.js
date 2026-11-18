@@ -29,7 +29,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=125';
+} from './config.js?v=126';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -37,15 +37,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=125';
+} from './forecast.js?v=126';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=125';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=125';
+} from './stats.js?v=126';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=126';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -74,8 +74,8 @@ import {
   diffRemovedEquipmentDevices,
   equipmentKhoSnippet,
   sortEquipmentHistoryEntries,
-} from './equipment.js?v=125';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=125';
+} from './equipment.js?v=126';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=126';
 
 
 const app = initializeApp(firebaseConfig);
@@ -2625,21 +2625,19 @@ function filteredKhoItems() {
   });
 }
 
+function canDeleteFromKho() {
+  return isPrivilegedUser();
+}
+
 function renderEquipmentKho() {
   const panel = $('#equipment-kho');
   const btn = $('#equipment-kho-btn');
   const listEl = $('#equipment-list');
   const empty = $('#equipment-empty');
   const findPanel = $('#equipment-find');
-  const canSeeKho = isRootUser();
   if (btn) {
-    btn.hidden = !canSeeKho;
-    btn.classList.toggle('is-active', !!(canSeeKho && state.equipmentKhoOpen));
-  }
-  if (!canSeeKho) {
-    state.equipmentKhoOpen = false;
-    if (panel) panel.hidden = true;
-    return;
+    btn.hidden = false;
+    btn.classList.toggle('is-active', !!state.equipmentKhoOpen);
   }
   if (panel) panel.hidden = !state.equipmentKhoOpen;
   if (!state.equipmentKhoOpen) return;
@@ -2657,7 +2655,7 @@ function renderEquipmentKho() {
   if (summary) {
     summary.textContent = rows.length
       ? `${rows.length} thiết bị trong Kho`
-      : 'Kho trống — thiết bị gỡ khỏi CSHT sẽ nằm ở đây.';
+      : 'Kho trống — thiết bị thu hồi khỏi CSHT sẽ nằm ở đây.';
   }
   const root = $('#equipment-kho-list');
   if (!root) return;
@@ -2665,6 +2663,7 @@ function renderEquipmentKho() {
     root.innerHTML = `<p class="muted tiny">Không có thiết bị đang nằm Kho.</p>`;
     return;
   }
+  const canDelete = canDeleteFromKho();
   root.innerHTML = rows
     .map((r) => {
       const typeDef = equipmentTypeById(r.typeId);
@@ -2684,13 +2683,20 @@ function renderEquipmentKho() {
                   ? 'Thêm'
                   : h.action === 'updated'
                     ? 'Sửa'
-                    : h.action || '—';
+                    : h.action === 'deleted'
+                      ? 'Xóa'
+                      : h.action || '—';
           return `<li>${escapeHtml(formatMillis(Number(h.at)))} · ${escapeHtml(action)} · ${escapeHtml(
             h.by || '—'
           )}${h.note ? ` — ${escapeHtml(h.note)}` : ''}</li>`;
         })
         .join('');
       const defaultCsht = escapeAttr(r.fromCsht || '');
+      const deleteBtn = canDelete
+        ? `<button type="button" class="btn-text danger" data-action="kho-delete" data-kho-id="${escapeAttr(
+            r.id
+          )}">Xóa</button>`
+        : '';
       return `<article class="equipment-kho-card" data-kho-id="${escapeAttr(r.id)}">
         <strong>${escapeHtml(title)}</strong>
         <div class="kho-meta">${escapeHtml(snippet)}</div>
@@ -2703,6 +2709,7 @@ function renderEquipmentKho() {
           <button type="button" class="btn-outline station-action-btn" data-action="kho-restore" data-kho-id="${escapeAttr(
             r.id
           )}">Khôi phục</button>
+          ${deleteBtn}
         </div>
       </article>`;
     })
@@ -3394,11 +3401,36 @@ async function deleteEquipmentDeviceDirect(maCsht, typeId, index) {
   }
 }
 
-async function restoreKhoDevice(khoId, targetCsht) {
-  if (!isRootUser()) {
-    toast('Chỉ root được khôi phục từ Kho');
+async function deleteKhoDevice(khoId) {
+  if (!canDeleteFromKho()) {
+    toast('Chỉ admin hoặc root được xóa khỏi Kho');
     return;
   }
+  const id = String(khoId || '').trim();
+  const row = state.equipmentKho?.[id];
+  if (!id || !row || row.status === 'restored') {
+    toast('Không tìm thấy thiết bị trong Kho');
+    return;
+  }
+  const typeDef = equipmentTypeById(row.typeId);
+  const label = equipmentKhoSnippet(typeDef, row.device) || typeDef?.title || 'thiết bị';
+  if (
+    !confirm(
+      `Xóa hẳn khỏi Kho?\n${label}\n\nThao tác không hoàn tác được.`
+    )
+  ) {
+    return;
+  }
+  try {
+    await remove(ref(db, `equipmentKho/${id}`));
+    toast('Đã xóa thiết bị khỏi Kho');
+    render();
+  } catch (e) {
+    toast('Xóa thất bại: ' + (e.message || e));
+  }
+}
+
+async function restoreKhoDevice(khoId, targetCsht) {
   const id = String(khoId || '').trim();
   const csht = String(targetCsht || '').trim();
   const row = state.equipmentKho?.[id];
@@ -3631,23 +3663,19 @@ function bindEvents() {
     if (state.equipmentFindOpen) $('#equipment-find-input')?.focus();
   });
   $('#equipment-kho-btn')?.addEventListener('click', () => {
-    if (!isRootUser()) {
-      toast('Chỉ root xem được Kho');
-      return;
-    }
     state.equipmentKhoOpen = !state.equipmentKhoOpen;
     if (state.equipmentKhoOpen) state.equipmentFindOpen = false;
     render();
     if (state.equipmentKhoOpen) $('#equipment-kho-search')?.focus();
   });
   $('#equipment-kho-search')?.addEventListener('input', (e) => {
-    if (!isRootUser()) return;
     state.equipmentKhoQuery = e.target.value;
     renderEquipmentKho();
   });
   $('#equipment-kho-list')?.addEventListener('click', (e) => {
-    if (!isRootUser()) {
-      toast('Chỉ root được khôi phục từ Kho');
+    const delBtn = e.target.closest('[data-action="kho-delete"][data-kho-id]');
+    if (delBtn) {
+      deleteKhoDevice(delBtn.dataset.khoId);
       return;
     }
     const btn = e.target.closest('[data-action="kho-restore"][data-kho-id]');
