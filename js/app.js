@@ -29,7 +29,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=126';
+} from './config.js?v=127';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -37,15 +37,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=126';
+} from './forecast.js?v=127';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=126';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=126';
+} from './stats.js?v=127';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=127';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -74,8 +74,8 @@ import {
   diffRemovedEquipmentDevices,
   equipmentKhoSnippet,
   sortEquipmentHistoryEntries,
-} from './equipment.js?v=126';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=126';
+} from './equipment.js?v=127';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=127';
 
 
 const app = initializeApp(firebaseConfig);
@@ -2671,6 +2671,7 @@ function renderEquipmentKho() {
       const snippet = equipmentKhoSnippet(typeDef, r.device);
       const from = [formatMaTram(r.fromMaTram), r.fromCsht, r.fromTenTram].filter(Boolean).join(' · ');
       const when = r.removedAt ? formatMillis(Number(r.removedAt)) : '—';
+      const reason = String(r.removeReason || '').trim();
       const hist = sortEquipmentHistoryEntries(r.history || r.device?.history)
         .slice(0, 8)
         .map((h) => {
@@ -2703,6 +2704,11 @@ function renderEquipmentKho() {
         <div class="kho-meta">Từ: ${escapeHtml(from || '—')} · ${escapeHtml(when)} · ${escapeHtml(
           r.removedBy || '—'
         )}</div>
+        ${
+          reason
+            ? `<div class="kho-meta"><strong>Lý do:</strong> ${escapeHtml(reason)}</div>`
+            : ''
+        }
         ${hist ? `<ul class="kho-history">${hist}</ul>` : `<p class="kho-meta">Chưa có lịch sử chi tiết</p>`}
         <div class="kho-actions">
           <input class="search kho-restore-csht" type="text" value="${defaultCsht}" placeholder="CSHT khôi phục" maxlength="40" aria-label="CSHT khôi phục" />
@@ -3285,6 +3291,18 @@ async function upsertEquipmentKindsFromDevices(typeId, devices, who) {
   await update(ref(db, 'equipmentKinds'), updates);
 }
 
+/** Bắt buộc nhập lý do thu hồi; null nếu hủy. */
+function promptThuHoiReason(unitLabel) {
+  const label = String(unitLabel || 'thiết bị').trim() || 'thiết bị';
+  while (true) {
+    const raw = window.prompt(`Lý do thu hồi ${label}:`, '');
+    if (raw == null) return null;
+    const reason = String(raw).trim();
+    if (reason) return reason.slice(0, 300);
+    toast('Cần nhập lý do thu hồi');
+  }
+}
+
 function deleteEquipmentDeviceFromDraft() {
   captureEquipmentFormIntoDraft();
   if (!equipmentDraft) return;
@@ -3294,7 +3312,15 @@ function deleteEquipmentDeviceFromDraft() {
     return;
   }
   const unit = equipmentUnitOptionLabel(equipmentDraft.typeId, equipmentDraft.index);
-  if (!confirm(`Thu hồi ${unit}?\nThiết bị vào Kho khi bấm Lưu thiết bị.`)) return;
+  const reason = promptThuHoiReason(unit);
+  if (reason == null) return;
+  const removed = list[equipmentDraft.index];
+  const key =
+    (removed && (removed.deviceId || removed.serial || removed.serial_dan_lanh || removed.serial_dan_nong)) ||
+    `${equipmentDraft.typeId}:${equipmentDraft.index}`;
+  if (!equipmentDraft.pendingKhoReasons) equipmentDraft.pendingKhoReasons = {};
+  equipmentDraft.pendingKhoReasons[String(key)] = reason;
+  if (removed?.deviceId) equipmentDraft.pendingKhoReasons[`id:${removed.deviceId}`] = reason;
   list.splice(equipmentDraft.index, 1);
   equipmentDraft.byType[equipmentDraft.typeId] = list;
   if (!list.length) list.push({});
@@ -3304,15 +3330,17 @@ function deleteEquipmentDeviceFromDraft() {
   toast('Đã thu hồi khỏi form — nhớ Lưu thiết bị');
 }
 
-/** Đưa thiết bị vào Kho (RTDB equipmentKho/{id}), kèm lịch sử. */
-async function moveDevicesToKho({ typeId, items, site, csht, who, uid, note }) {
+/** Đưa thiết bị vào Kho (RTDB equipmentKho/{id}), kèm lịch sử + lý do. */
+async function moveDevicesToKho({ typeId, items, site, csht, who, uid, note, reason }) {
   const typeDef = equipmentTypeById(typeId);
   if (!typeDef || !items?.length) return [];
   const ids = [];
+  const reasonText = String(reason || note || '').trim();
   for (const item of items) {
     let device = sanitizeEquipmentDevice(typeDef, item.device || item);
     if (!countEquipmentDataFields(device) && !device.deviceId) continue;
     device = ensureEquipmentDeviceId(device);
+    const itemReason = String(item.reason || reasonText || '').trim();
     if (device.lastEditedBy || device.lastEditedAt) {
       device = appendEquipmentHistory(device, {
         at: Number(device.lastEditedAt) || Date.now(),
@@ -3330,7 +3358,7 @@ async function moveDevicesToKho({ typeId, items, site, csht, who, uid, note }) {
       action: 'moved_to_kho',
       csht,
       maTram: site?.maTram || null,
-      note: note || 'Gỡ khỏi CSHT → Kho',
+      note: itemReason || 'Thu hồi → Kho',
     });
     device.lastEditedBy = who;
     device.lastEditedAt = Date.now();
@@ -3344,6 +3372,7 @@ async function moveDevicesToKho({ typeId, items, site, csht, who, uid, note }) {
       fromTenTram: site?.tenTram || null,
       fromIndex: item.index ?? null,
       status: 'in_kho',
+      removeReason: itemReason || null,
       removedAt: serverTimestamp(),
       removedBy: who,
       removedByUid: uid || null,
@@ -3366,7 +3395,8 @@ async function deleteEquipmentDeviceDirect(maCsht, typeId, index) {
     return;
   }
   const unit = equipmentUnitOptionLabel(typeId, index);
-  if (!confirm(`Thu hồi ${unit}?\nThiết bị và lịch sử được chuyển vào Kho, không xóa hẳn.`)) return;
+  const reason = promptThuHoiReason(unit);
+  if (reason == null) return;
   const removed = devices[index];
   devices.splice(index, 1);
   const who = currentUserLabel();
@@ -3377,12 +3407,13 @@ async function deleteEquipmentDeviceDirect(maCsht, typeId, index) {
   try {
     await moveDevicesToKho({
       typeId,
-      items: [{ device: removed, index }],
+      items: [{ device: removed, index, reason }],
       site,
       csht,
       who,
       uid: state.user.uid,
-      note: `Gỡ ${unit} khỏi ${formatMaTram(site.maTram) || csht}`,
+      reason,
+      note: reason,
     });
     await update(ref(db, `equipment/${csht}`), {
       ...equipmentSiteMetaPatch(csht, site, who),
@@ -3556,13 +3587,32 @@ async function saveEquipment() {
   }
   const removed = diffRemovedEquipmentDevices(prevList, devices);
   if (removed.length) {
+    const pending = equipmentDraft.pendingKhoReasons || {};
+    const withReasons = [];
+    for (const item of removed) {
+      const d = item.device || {};
+      let reason =
+        pending[`id:${d.deviceId || ''}`] ||
+        pending[String(d.deviceId || '')] ||
+        pending[String(d.serial || d.serial_dan_lanh || d.serial_dan_nong || '')] ||
+        '';
+      reason = String(reason || '').trim();
+      if (!reason) {
+        const unit = equipmentUnitOptionLabel(typeId, item.index);
+        reason = promptThuHoiReason(unit);
+        if (reason == null) return;
+      }
+      withReasons.push({ ...item, reason });
+    }
     if (
       !confirm(
-        `Có ${removed.length} ${typeDef.title} sẽ chuyển vào Kho (không xóa hẳn). Tiếp tục?`
+        `Có ${withReasons.length} ${typeDef.title} sẽ thu hồi vào Kho. Tiếp tục lưu?`
       )
     ) {
       return;
     }
+    removed.length = 0;
+    removed.push(...withReasons);
   }
   const payload = equipmentPayload(devices, who, state.user.uid, 'manual');
   try {
@@ -3574,7 +3624,7 @@ async function saveEquipment() {
         csht,
         who,
         uid: state.user.uid,
-        note: 'Gỡ khi lưu form thiết bị',
+        note: removed[0]?.reason || 'Thu hồi khi lưu form',
       });
     }
     await update(ref(db, `equipment/${csht}`), {
