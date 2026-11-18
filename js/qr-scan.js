@@ -26,6 +26,10 @@ let active = null;
 
 function ensureOverlay() {
   let el = document.getElementById('qr-scan-overlay');
+  if (el && !el.querySelector('[data-scan-mode]')) {
+    el.remove();
+    el = null;
+  }
   if (el) return el;
   el = document.createElement('div');
   el.id = 'qr-scan-overlay';
@@ -37,15 +41,57 @@ function ensureOverlay() {
         <strong>Quét mã</strong>
         <button type="button" class="btn-text" data-qr-close>Đóng</button>
       </div>
+      <div class="qr-scan-mode" role="tablist" aria-label="Loại mã">
+        <button type="button" data-scan-mode="barcode" class="is-active" role="tab" aria-selected="true">Barcode</button>
+        <button type="button" data-scan-mode="qr" role="tab" aria-selected="false">QR</button>
+      </div>
       <div class="qr-scan-video-wrap">
         <video playsinline muted autoplay></video>
-        <div class="qr-scan-frame" aria-hidden="true"></div>
+        <div class="qr-scan-frame is-barcode" aria-hidden="true"></div>
       </div>
-        <p class="qr-scan-hint muted tiny" data-qr-hint>Đưa mã vào khung — camera tự lấy nét. Chạm màn hình để lấy nét lại.</p>
+      <p class="qr-scan-hint muted tiny" data-qr-hint>Đưa barcode ngang vào khung — chạm màn hình để lấy nét lại.</p>
       <p class="qr-scan-status muted tiny" data-qr-status hidden></p>
     </div>`;
   document.body.appendChild(el);
   return el;
+}
+
+/** inset % theo mode — khớp CSS .qr-scan-frame.is-barcode / .is-qr */
+function viewfinderInsets(mode, loosen = 0) {
+  if (mode === 'qr') {
+    return {
+      insetX: Math.max(0.04, 0.14 - loosen),
+      insetY: Math.max(0.05, 0.18 - loosen),
+    };
+  }
+  // Barcode: chữ nhật ngang
+  return {
+    insetX: Math.max(0.02, 0.05 - loosen * 0.5),
+    insetY: Math.max(0.28, 0.36 - loosen),
+  };
+}
+
+function applyScanFrameMode(overlay, mode) {
+  const frame = overlay?.querySelector?.('.qr-scan-frame');
+  const hint = overlay?.querySelector?.('[data-qr-hint]');
+  const buttons = overlay?.querySelectorAll?.('[data-scan-mode]') || [];
+  const next = mode === 'qr' ? 'qr' : 'barcode';
+  if (frame) {
+    frame.classList.toggle('is-qr', next === 'qr');
+    frame.classList.toggle('is-barcode', next === 'barcode');
+  }
+  for (const btn of buttons) {
+    const on = btn.getAttribute('data-scan-mode') === next;
+    btn.classList.toggle('is-active', on);
+    btn.setAttribute('aria-selected', on ? 'true' : 'false');
+  }
+  if (hint) {
+    hint.textContent =
+      next === 'qr'
+        ? 'Đưa QR vào khung vuông — chạm màn hình để lấy nét lại.'
+        : 'Đưa barcode ngang vào khung chữ nhật — chạm màn hình để lấy nét lại.';
+  }
+  return next;
 }
 
 function setStatus(el, text) {
@@ -196,9 +242,9 @@ function preferSerial(values) {
 
 /**
  * Vùng khung hình (object-fit: cover) đổi sang pixel của video nguồn.
- * inset CSS: 18% dọc, 14% ngang. loosen nới vùng để mã nhỏ không phải nằm đúng tâm.
+ * mode: 'barcode' | 'qr' — khớp khung CSS.
  */
-function viewfinderSourceRect(video, loosen = 0) {
+function viewfinderSourceRect(video, loosen = 0, mode = 'barcode') {
   const vw = video.videoWidth;
   const vh = video.videoHeight;
   const rect = video.getBoundingClientRect();
@@ -206,8 +252,7 @@ function viewfinderSourceRect(video, loosen = 0) {
   const scale = Math.max(rect.width / vw, rect.height / vh);
   const offsetX = (rect.width - vw * scale) / 2;
   const offsetY = (rect.height - vh * scale) / 2;
-  const insetX = Math.max(0.04, 0.14 - loosen);
-  const insetY = Math.max(0.05, 0.18 - loosen);
+  const { insetX, insetY } = viewfinderInsets(mode, loosen);
   const frameLeft = rect.left + rect.width * insetX;
   const frameTop = rect.top + rect.height * insetY;
   const frameW = rect.width * (1 - insetX * 2);
@@ -216,7 +261,8 @@ function viewfinderSourceRect(video, loosen = 0) {
   const sy = Math.max(0, Math.floor((frameTop - rect.top - offsetY) / scale));
   const sw = Math.min(vw - sx, Math.ceil(frameW / scale));
   const sh = Math.min(vh - sy, Math.ceil(frameH / scale));
-  if (sw < 48 || sh < 48) return null;
+  const minH = mode === 'barcode' ? 24 : 48;
+  if (sw < 48 || sh < minH) return null;
   return { sx, sy, sw, sh };
 }
 
@@ -230,10 +276,10 @@ function codeCenter(code) {
 }
 
 /** Ưu tiên mã trong khung; không có tọa độ hoặc lệch hệ tọa độ thì vẫn lấy mã gần tâm. */
-function pickScanValue(codes, video) {
+function pickScanValue(codes, video, mode = 'barcode') {
   const list = (codes || []).filter((c) => String(c?.rawValue || '').trim());
   if (!list.length) return '';
-  const crop = viewfinderSourceRect(video);
+  const crop = viewfinderSourceRect(video, 0, mode);
   const inside = crop
     ? list.filter((c) => {
         const p = codeCenter(c);
@@ -298,9 +344,7 @@ export function openQrScanner() {
   const hint = overlay.querySelector('[data-qr-hint]');
   const closeBtn = overlay.querySelector('[data-qr-close]');
   overlay.hidden = false;
-  if (hint) {
-    hint.textContent = 'Đưa mã vào khung — camera tự lấy nét. Chạm màn hình để lấy nét lại.';
-  }
+  let scanMode = applyScanFrameMode(overlay, 'barcode');
   setStatus(status, 'Đang mở camera…');
 
   return new Promise(async (resolve) => {
@@ -373,16 +417,27 @@ export function openQrScanner() {
     overlay.onclick = (e) => {
       if (e.target === overlay) finish(null);
     };
+    overlay.querySelectorAll('[data-scan-mode]').forEach((btn) => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        scanMode = applyScanFrameMode(overlay, btn.getAttribute('data-scan-mode'));
+        lastValue = '';
+        streak = 0;
+      };
+    });
     if (videoWrap) videoWrap.addEventListener('click', onTapFocus);
 
     const rawValues = (codes) =>
       (codes || []).map((c) => String(c?.rawValue || '').trim()).filter(Boolean);
 
-    /** Phóng vùng giữa khung — chỉ dùng khi detect video chưa ra kết quả. */
+    /** Phóng vùng khung theo mode — chỉ dùng khi detect video chưa ra kết quả. */
     const drawZoomedViewfinder = () => {
-      const crop = viewfinderSourceRect(video, 0.08);
+      const crop = viewfinderSourceRect(video, 0.08, scanMode);
       if (!crop) return false;
-      const scale = Math.min(2.2, 1280 / crop.sw);
+      const scale =
+        scanMode === 'barcode'
+          ? Math.min(2.6, 1600 / Math.max(crop.sw, 1))
+          : Math.min(2.2, 1280 / Math.max(crop.sw, 1));
       canvas.width = Math.max(1, Math.round(crop.sw * scale));
       canvas.height = Math.max(1, Math.round(crop.sh * scale));
       ctx.imageSmoothingEnabled = false;
@@ -398,7 +453,7 @@ export function openQrScanner() {
       // 1) Detect trực tiếp từ video — nhanh nhất.
       if (detector) {
         try {
-          const hit = preferSerial([pickScanValue(await detector.detect(video), video)]);
+          const hit = preferSerial([pickScanValue(await detector.detect(video), video, scanMode)]);
           if (hit) return hit;
         } catch {
           /* thử canvas */
@@ -414,9 +469,9 @@ export function openQrScanner() {
           }
         }
       }
-      // 3) jsQR chỉ là fallback (chủ yếu QR) khi native chưa ra.
+      // 3) jsQR fallback — hữu ích hơn ở mode QR.
       if (!jsQR) jsQR = await jsQRReady;
-      if (jsQR && drawZoomedViewfinder()) {
+      if (jsQR && (scanMode === 'qr' || !detector) && drawZoomedViewfinder()) {
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const code = jsQR(imageData.data, canvas.width, canvas.height, {
           inversionAttempts: 'attemptBoth',

@@ -2546,11 +2546,46 @@ main {
 
 .qr-scan-frame {
   position: absolute;
-  inset: 18% 14%;
   border: 2px solid rgba(120, 200, 255, 0.85);
   border-radius: 12px;
   box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.28);
   pointer-events: none;
+}
+
+/* QR: khung gần vuông như cũ */
+.qr-scan-frame.is-qr {
+  inset: 18% 14%;
+  border-radius: 12px;
+}
+
+/* Barcode: hình chữ nhật ngang, sát giữa */
+.qr-scan-frame.is-barcode {
+  inset: 36% 5%;
+  border-radius: 8px;
+}
+
+.qr-scan-mode {
+  display: flex;
+  gap: 6px;
+  padding: 0 14px 8px;
+}
+
+.qr-scan-mode button {
+  flex: 1;
+  min-height: 34px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: #c5d4e4;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.qr-scan-mode button.is-active {
+  background: rgba(120, 190, 255, 0.22);
+  border-color: rgba(120, 200, 255, 0.7);
+  color: #e8f4ff;
 }
 
 .qr-scan-hint,
