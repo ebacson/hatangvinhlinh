@@ -28,7 +28,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=119';
+} from './config.js?v=120';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +36,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=119';
+} from './forecast.js?v=120';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=119';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=119';
+} from './stats.js?v=120';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=120';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -67,8 +67,8 @@ import {
   applyPostefAcquyYearFromSerial,
   findEquipmentSerialConflict,
   isUniqueEquipmentField,
-} from './equipment.js?v=119';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=119';
+} from './equipment.js?v=120';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=120';
 
 
 const app = initializeApp(firebaseConfig);
@@ -2559,7 +2559,7 @@ function equipmentSearchScore(query, qCompact, typeDef, device, site, maCsht) {
 function searchEquipmentDevices(query) {
   const q = String(query || '').trim().toLowerCase();
   const qCompact = q.replace(/\s+/g, '');
-  if (qCompact.length < 2) return [];
+  if (qCompact.length < 2) return { hits: [], total: 0 };
   const hits = [];
   for (const [maCsht, site] of Object.entries(state.equipmentByCsht || {})) {
     const siteBlob = `${maCsht} ${site?.maTram || ''} ${(site?.maTrams || []).join(' ')} ${
