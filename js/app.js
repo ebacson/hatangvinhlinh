@@ -29,7 +29,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=128';
+} from './config.js?v=129';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -37,15 +37,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=128';
+} from './forecast.js?v=129';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=128';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=128';
+} from './stats.js?v=129';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=129';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -74,8 +74,8 @@ import {
   diffRemovedEquipmentDevices,
   equipmentKhoSnippet,
   sortEquipmentHistoryEntries,
-} from './equipment.js?v=128';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=128';
+} from './equipment.js?v=129';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=129';
 
 
 const app = initializeApp(firebaseConfig);
@@ -2679,7 +2679,7 @@ function renderEquipmentKho() {
             h.action === 'moved_to_kho'
               ? 'Thu hồi'
               : h.action === 'restored'
-                ? 'Khôi phục'
+                ? 'Điều chuyển'
                 : h.action === 'created'
                   ? 'Thêm'
                   : h.action === 'updated'
@@ -2711,10 +2711,10 @@ function renderEquipmentKho() {
         }
         ${hist ? `<ul class="kho-history">${hist}</ul>` : `<p class="kho-meta">Chưa có lịch sử chi tiết</p>`}
         <div class="kho-actions">
-          <input class="search kho-restore-csht" type="text" value="${defaultCsht}" placeholder="CSHT khôi phục" maxlength="40" aria-label="CSHT khôi phục" />
+          <input class="search kho-restore-csht" type="text" value="${defaultCsht}" placeholder="CSHT điều chuyển" maxlength="40" aria-label="CSHT điều chuyển" />
           <button type="button" class="btn-outline station-action-btn" data-action="kho-restore" data-kho-id="${escapeAttr(
             r.id
-          )}">Khôi phục</button>
+          )}">Điều chuyển</button>
           ${deleteBtn}
         </div>
       </article>`;
@@ -3470,7 +3470,7 @@ async function restoreKhoDevice(khoId, targetCsht) {
     return;
   }
   if (!csht) {
-    toast('Thiếu mã CSHT để khôi phục');
+    toast('Thiếu mã CSHT để điều chuyển');
     return;
   }
   const typeId = row.typeId;
@@ -3489,7 +3489,7 @@ async function restoreKhoDevice(khoId, targetCsht) {
     action: 'restored',
     csht,
     maTram: site.maTram || null,
-    note: `Khôi phục từ Kho → ${formatMaTram(site.maTram) || csht}`,
+    note: `Điều chuyển từ Kho → ${formatMaTram(site.maTram) || csht}`,
   });
   device.lastEditedBy = who;
   device.lastEditedAt = Date.now();
@@ -3523,12 +3523,12 @@ async function restoreKhoDevice(khoId, targetCsht) {
       device,
       history: device.history || {},
     });
-    toast(`Đã khôi phục ${typeDef.title} → ${formatMaTram(site.maTram) || csht}`);
+    toast(`Đã điều chuyển ${typeDef.title} → ${formatMaTram(site.maTram) || csht}`);
     state.equipmentKhoOpen = false;
     state.equipmentExpanded = { ...state.equipmentExpanded, [csht]: true };
     render();
   } catch (e) {
-    toast('Khôi phục thất bại: ' + (e.message || e));
+    toast('Điều chuyển thất bại: ' + (e.message || e));
   }
 }
 
@@ -3737,11 +3737,11 @@ function bindEvents() {
     const row = state.equipmentKho?.[khoId];
     const csht = String(cshtInput?.value || row?.fromCsht || '').trim();
     if (!csht) {
-      toast('Nhập mã CSHT để khôi phục');
+      toast('Nhập mã CSHT để điều chuyển');
       cshtInput?.focus();
       return;
     }
-    if (!confirm(`Khôi phục thiết bị về ${csht}?`)) return;
+    if (!confirm(`Điều chuyển thiết bị về ${csht}?`)) return;
     restoreKhoDevice(khoId, csht);
   });
   $('#equipment-find-input')?.addEventListener('input', (e) => {
