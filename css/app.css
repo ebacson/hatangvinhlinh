@@ -841,6 +841,60 @@ main {
   font-size: 0.86rem;
 }
 
+#equipment-kho-btn.is-active {
+  background: var(--accent-soft, #e8f2fb);
+  border-color: var(--accent, #1a6fb5);
+  color: var(--accent, #1a6fb5);
+}
+
+.equipment-kho {
+  margin-top: 0.75rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.equipment-kho-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.equipment-kho-card {
+  border: 1px solid var(--border, #d7e0ea);
+  border-radius: 12px;
+  padding: 0.75rem 0.85rem;
+  background: var(--surface, #fff);
+  display: grid;
+  gap: 0.45rem;
+}
+
+.equipment-kho-card strong {
+  font-size: 0.95rem;
+}
+
+.equipment-kho-card .kho-meta {
+  color: var(--muted, #667788);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.equipment-kho-card .kho-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.equipment-kho-card .kho-history {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.75rem;
+  color: var(--muted, #667788);
+}
+
+.equipment-kho-card .kho-history li {
+  margin: 0.15rem 0;
+}
+
 .equipment-find-hit span {
   font-size: 0.78rem;
   color: #5a6f84;

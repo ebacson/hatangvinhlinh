@@ -1,5 +1,5 @@
 /** Quản lý thiết bị trạm — root RTDB `equipment/{CSHT_…}` (chủng loại + thông số KT). */
-import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=121';
+import { EQUIPMENT_SCHEMA } from './equipment-schema.js?v=122';
 
 const BASE = '/hatangvinhlinh';
 
@@ -81,7 +81,7 @@ const TYPE_IDS = new Set(equipmentTypes().map((t) => t.id));
 export async function loadEquipmentCatalog() {
   if (catalogCache) return catalogCache;
   if (!catalogPromise) {
-    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=121`)
+    catalogPromise = fetch(`${BASE}/js/equipment-data.json?v=122`)
       .then((r) => {
         if (!r.ok) throw new Error('Không tải được file thiết bị');
         return r.json();
@@ -284,6 +284,107 @@ export function equipmentPayload(devices, who, uid, source) {
     lastEditedAt: Date.now(),
     source: source || 'manual',
   };
+}
+
+/** Id ổn định theo thiết bị — giữ khi chuyển Kho / khôi phục. */
+export function newEquipmentDeviceId() {
+  return `d_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function ensureEquipmentDeviceId(device) {
+  const d = device && typeof device === 'object' ? { ...device } : {};
+  if (!String(d.deviceId || '').trim()) d.deviceId = newEquipmentDeviceId();
+  return d;
+}
+
+export function newEquipmentHistoryId() {
+  return `h_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** Ghi thêm mục lịch sử trên object thiết bị (local, trước khi PUT RTDB). */
+export function appendEquipmentHistory(device, entry) {
+  const d = ensureEquipmentDeviceId(device);
+  const history =
+    d.history && typeof d.history === 'object' && !Array.isArray(d.history) ? { ...d.history } : {};
+  const id = String(entry?.id || newEquipmentHistoryId());
+  history[id] = {
+    id,
+    at: entry?.at || Date.now(),
+    by: entry?.by || null,
+    byUid: entry?.byUid || null,
+    action: entry?.action || 'updated',
+    csht: entry?.csht || null,
+    maTram: entry?.maTram || null,
+    note: entry?.note || null,
+  };
+  d.history = history;
+  return d;
+}
+
+/** Chuẩn hoá field schema + giữ deviceId/history/meta. */
+export function sanitizeEquipmentDevice(typeDef, device) {
+  const src = device && typeof device === 'object' ? device : {};
+  const clean = {};
+  for (const f of typeDef?.fields || []) {
+    if (src[f.key] != null && String(src[f.key]).trim() !== '') {
+      clean[f.key] = String(src[f.key]).trim();
+    }
+  }
+  if (src.deviceId) clean.deviceId = String(src.deviceId).trim();
+  if (src.history && typeof src.history === 'object') clean.history = src.history;
+  if (src.lastEditedBy) clean.lastEditedBy = src.lastEditedBy;
+  if (src.lastEditedAt != null) clean.lastEditedAt = src.lastEditedAt;
+  return clean;
+}
+
+export function equipmentDeviceMatchKey(device) {
+  const id = String(device?.deviceId || '').trim();
+  if (id) return `id:${id}`;
+  const serial = normalizeEquipmentSerial(
+    device?.serial || device?.serial_dan_lanh || device?.serial_dan_nong || ''
+  );
+  if (serial) return `sn:${serial}`;
+  return '';
+}
+
+/** Thiết bị có trên prev nhưng không còn trên next → đưa Kho. */
+export function diffRemovedEquipmentDevices(prevList, nextList) {
+  const nextKeys = new Set();
+  for (let i = 0; i < (nextList || []).length; i++) {
+    const k = equipmentDeviceMatchKey(nextList[i]);
+    if (k) nextKeys.add(k);
+  }
+  const removed = [];
+  for (let i = 0; i < (prevList || []).length; i++) {
+    const d = prevList[i];
+    if (!d || typeof d !== 'object') continue;
+    if (!countEquipmentDataFields(d) && !d.deviceId) continue;
+    const k = equipmentDeviceMatchKey(d);
+    if (k) {
+      if (!nextKeys.has(k)) removed.push({ device: d, index: i });
+      continue;
+    }
+    // Không id/serial: coi là còn nếu còn slot cùng vị trí còn dữ liệu
+    if (i < (nextList || []).length && countEquipmentDataFields(nextList[i])) continue;
+    removed.push({ device: d, index: i });
+  }
+  return removed;
+}
+
+export function equipmentKhoSnippet(typeDef, device) {
+  const serial = String(device?.serial || device?.serial_dan_lanh || device?.serial_dan_nong || '').trim();
+  const brand = String(
+    device?.hang_san_xuat || device?.hang_san_xuat_thiet_bi || device?.nha_san_xuat || ''
+  ).trim();
+  const model = String(device?.model || '').trim();
+  return [brand, model, serial].filter(Boolean).join(' · ') || typeDef?.title || 'Thiết bị';
+}
+
+export function sortEquipmentHistoryEntries(history) {
+  const rows = Object.values(history && typeof history === 'object' ? history : {});
+  return rows
+    .filter((h) => h && typeof h === 'object')
+    .sort((a, b) => Number(b.at || 0) - Number(a.at || 0));
 }
 
 /** Nhãn loại NL station → text hiển thị trên thiết bị. */

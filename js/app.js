@@ -18,6 +18,7 @@ import {
   set,
   remove,
   get,
+  push,
   serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-database.js';
 import {
@@ -28,7 +29,7 @@ import {
   ALERT_TABS,
   LONG_RUN_MS,
   LOW_FUEL_PERCENT,
-} from './config.js?v=121';
+} from './config.js?v=122';
 import {
   stationForecast,
   forecastFuelPercentDuringActiveAlert,
@@ -36,15 +37,15 @@ import {
   formatDuration,
   formatMillis,
   formatPercent,
-} from './forecast.js?v=121';
+} from './forecast.js?v=122';
 import {
   extractMayNoRuns,
   computeStats,
   formatPeriodLabel,
   fuelTypeLabel,
   formatLiters,
-} from './stats.js?v=121';
-import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=121';
+} from './stats.js?v=122';
+import { downloadExcelWorkbook, safeFilePart } from './exportExcel.js?v=122';
 import {
   equipmentTypes,
   equipmentTypeById,
@@ -67,8 +68,14 @@ import {
   applyPostefAcquyYearFromSerial,
   findEquipmentSerialConflict,
   isUniqueEquipmentField,
-} from './equipment.js?v=121';
-import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=121';
+  ensureEquipmentDeviceId,
+  appendEquipmentHistory,
+  sanitizeEquipmentDevice,
+  diffRemovedEquipmentDevices,
+  equipmentKhoSnippet,
+  sortEquipmentHistoryEntries,
+} from './equipment.js?v=122';
+import { openQrScanner, closeQrScanner, isQrScannerOpen } from './qr-scan.js?v=122';
 
 
 const app = initializeApp(firebaseConfig);
@@ -105,6 +112,11 @@ const state = {
   equipmentQuery: '',
   equipmentFindOpen: false,
   equipmentFindQuery: '',
+  /** Map id → bản ghi Kho thiết bị */
+  equipmentKho: {},
+  /** Xem danh sách Kho thay vì CSHT */
+  equipmentKhoOpen: false,
+  equipmentKhoQuery: '',
   /** 'all' | 'nearest' */
   equipmentGeoFilter: 'all',
   /** Vị trí GPS hiện tại: { lat, lng, accuracy, at } | null */
@@ -578,8 +590,11 @@ function render() {
   if (state.tab === 'stations') renderStations();
   if (state.tab === 'alerts') renderAlerts();
   if (state.tab === 'equipment') {
-    renderEquipmentList();
-    renderEquipmentFind();
+    renderEquipmentKho();
+    if (!state.equipmentKhoOpen) {
+      renderEquipmentList();
+      renderEquipmentFind();
+    }
   }
   if (state.tab === 'stats' && canViewStats()) renderStats();
   if (state.tab === 'settings') renderSettings();
@@ -2593,13 +2608,105 @@ function searchEquipmentDevices(query) {
   return { hits: hits.slice(0, 80), total: hits.length };
 }
 
+function filteredKhoItems() {
+  const q = state.equipmentKhoQuery.trim().toLowerCase();
+  const rows = Object.entries(state.equipmentKho || {})
+    .map(([id, row]) => ({ id, ...(row || {}) }))
+    .filter((r) => r.status !== 'restored');
+  rows.sort((a, b) => Number(b.removedAt || 0) - Number(a.removedAt || 0));
+  if (!q) return rows;
+  return rows.filter((r) => {
+    const typeDef = equipmentTypeById(r.typeId);
+    const snippet = equipmentKhoSnippet(typeDef, r.device);
+    const hay = `${r.typeId} ${typeDef?.title || ''} ${snippet} ${r.fromCsht || ''} ${
+      r.fromMaTram || ''
+    } ${r.fromTenTram || ''} ${r.removedBy || ''}`.toLowerCase();
+    return hay.includes(q);
+  });
+}
+
+function renderEquipmentKho() {
+  const panel = $('#equipment-kho');
+  const btn = $('#equipment-kho-btn');
+  const listEl = $('#equipment-list');
+  const empty = $('#equipment-empty');
+  const findPanel = $('#equipment-find');
+  if (btn) btn.classList.toggle('is-active', !!state.equipmentKhoOpen);
+  if (panel) panel.hidden = !state.equipmentKhoOpen;
+  if (!state.equipmentKhoOpen) return;
+  if (findPanel) findPanel.hidden = true;
+  state.equipmentFindOpen = false;
+  $('#equipment-find-btn')?.classList.remove('is-active');
+  if (listEl) listEl.innerHTML = '';
+  if (empty) empty.hidden = true;
+  const input = $('#equipment-kho-search');
+  if (input && document.activeElement !== input && input.value !== state.equipmentKhoQuery) {
+    input.value = state.equipmentKhoQuery;
+  }
+  const rows = filteredKhoItems();
+  const summary = $('#equipment-kho-summary');
+  if (summary) {
+    summary.textContent = rows.length
+      ? `${rows.length} thiết bị trong Kho`
+      : 'Kho trống — thiết bị gỡ khỏi CSHT sẽ nằm ở đây.';
+  }
+  const root = $('#equipment-kho-list');
+  if (!root) return;
+  if (!rows.length) {
+    root.innerHTML = `<p class="muted tiny">Không có thiết bị đang nằm Kho.</p>`;
+    return;
+  }
+  root.innerHTML = rows
+    .map((r) => {
+      const typeDef = equipmentTypeById(r.typeId);
+      const title = typeDef?.title || r.typeId || 'Thiết bị';
+      const snippet = equipmentKhoSnippet(typeDef, r.device);
+      const from = [formatMaTram(r.fromMaTram), r.fromCsht, r.fromTenTram].filter(Boolean).join(' · ');
+      const when = r.removedAt ? formatMillis(Number(r.removedAt)) : '—';
+      const hist = sortEquipmentHistoryEntries(r.history || r.device?.history)
+        .slice(0, 8)
+        .map((h) => {
+          const action =
+            h.action === 'moved_to_kho'
+              ? 'Vào Kho'
+              : h.action === 'restored'
+                ? 'Khôi phục'
+                : h.action === 'created'
+                  ? 'Thêm'
+                  : h.action === 'updated'
+                    ? 'Sửa'
+                    : h.action || '—';
+          return `<li>${escapeHtml(formatMillis(Number(h.at)))} · ${escapeHtml(action)} · ${escapeHtml(
+            h.by || '—'
+          )}${h.note ? ` — ${escapeHtml(h.note)}` : ''}</li>`;
+        })
+        .join('');
+      const defaultCsht = escapeAttr(r.fromCsht || '');
+      return `<article class="equipment-kho-card" data-kho-id="${escapeAttr(r.id)}">
+        <strong>${escapeHtml(title)}</strong>
+        <div class="kho-meta">${escapeHtml(snippet)}</div>
+        <div class="kho-meta">Từ: ${escapeHtml(from || '—')} · ${escapeHtml(when)} · ${escapeHtml(
+          r.removedBy || '—'
+        )}</div>
+        ${hist ? `<ul class="kho-history">${hist}</ul>` : `<p class="kho-meta">Chưa có lịch sử chi tiết</p>`}
+        <div class="kho-actions">
+          <input class="search kho-restore-csht" type="text" value="${defaultCsht}" placeholder="CSHT khôi phục" maxlength="40" aria-label="CSHT khôi phục" />
+          <button type="button" class="btn-outline station-action-btn" data-action="kho-restore" data-kho-id="${escapeAttr(
+            r.id
+          )}">Khôi phục</button>
+        </div>
+      </article>`;
+    })
+    .join('');
+}
+
 function renderEquipmentFind() {
   const panel = $('#equipment-find');
   const btn = $('#equipment-find-btn');
   if (btn) btn.classList.toggle('is-active', !!state.equipmentFindOpen);
   if (!panel) return;
-  panel.hidden = !state.equipmentFindOpen;
-  if (!state.equipmentFindOpen) return;
+  panel.hidden = !state.equipmentFindOpen || !!state.equipmentKhoOpen;
+  if (!state.equipmentFindOpen || state.equipmentKhoOpen) return;
   const input = $('#equipment-find-input');
   if (input && document.activeElement !== input && input.value !== state.equipmentFindQuery) {
     input.value = state.equipmentFindQuery;
@@ -2644,6 +2751,16 @@ function renderEquipmentList() {
   const empty = $('#equipment-empty');
   const summary = $('#equipment-summary');
   if (!root || !empty) return;
+  if (state.equipmentKhoOpen) {
+    root.innerHTML = '';
+    empty.hidden = true;
+    if (summary) {
+      const n = filteredKhoItems().length;
+      summary.hidden = false;
+      summary.textContent = `${n} trong Kho`;
+    }
+    return;
+  }
   const syncBtn = $('#equipment-sync-mayno');
   if (syncBtn) syncBtn.hidden = !isRootUser();
   syncEquipmentGeoFilterControl();
@@ -3161,14 +3278,65 @@ function deleteEquipmentDeviceFromDraft() {
     return;
   }
   const unit = equipmentUnitOptionLabel(equipmentDraft.typeId, equipmentDraft.index);
-  if (!confirm(`Xóa ${unit}?`)) return;
+  if (!confirm(`Chuyển ${unit} vào Kho?\n(Không xóa hẳn — sẽ lưu khi bấm Lưu thiết bị)`)) return;
   list.splice(equipmentDraft.index, 1);
   equipmentDraft.byType[equipmentDraft.typeId] = list;
   if (!list.length) list.push({});
   equipmentDraft.index = Math.min(equipmentDraft.index, list.length - 1);
   equipmentDraft.dirty = true;
   renderEquipmentEditor(equipmentDraft.maCsht, true);
-  toast('Đã xóa khỏi bản nháp — nhớ Lưu thiết bị');
+  toast('Đã đưa khỏi form — nhớ Lưu để chuyển vào Kho');
+}
+
+/** Đưa thiết bị vào Kho (RTDB equipmentKho/{id}), kèm lịch sử. */
+async function moveDevicesToKho({ typeId, items, site, csht, who, uid, note }) {
+  const typeDef = equipmentTypeById(typeId);
+  if (!typeDef || !items?.length) return [];
+  const ids = [];
+  for (const item of items) {
+    let device = sanitizeEquipmentDevice(typeDef, item.device || item);
+    if (!countEquipmentDataFields(device) && !device.deviceId) continue;
+    device = ensureEquipmentDeviceId(device);
+    if (device.lastEditedBy || device.lastEditedAt) {
+      device = appendEquipmentHistory(device, {
+        at: Number(device.lastEditedAt) || Date.now(),
+        by: device.lastEditedBy || who,
+        action: 'recorded',
+        csht,
+        maTram: site?.maTram || null,
+        note: 'Trạng thái trước khi vào Kho',
+      });
+    }
+    device = appendEquipmentHistory(device, {
+      at: Date.now(),
+      by: who,
+      byUid: uid,
+      action: 'moved_to_kho',
+      csht,
+      maTram: site?.maTram || null,
+      note: note || 'Gỡ khỏi CSHT → Kho',
+    });
+    device.lastEditedBy = who;
+    device.lastEditedAt = Date.now();
+    const khoRef = push(ref(db, 'equipmentKho'));
+    const record = {
+      typeId,
+      device,
+      deviceId: device.deviceId,
+      fromCsht: csht || null,
+      fromMaTram: site?.maTram || null,
+      fromTenTram: site?.tenTram || null,
+      fromIndex: item.index ?? null,
+      status: 'in_kho',
+      removedAt: serverTimestamp(),
+      removedBy: who,
+      removedByUid: uid || null,
+      history: device.history || {},
+    };
+    await set(khoRef, record);
+    ids.push(khoRef.key);
+  }
+  return ids;
 }
 
 async function deleteEquipmentDeviceDirect(maCsht, typeId, index) {
@@ -3182,21 +3350,83 @@ async function deleteEquipmentDeviceDirect(maCsht, typeId, index) {
     return;
   }
   const unit = equipmentUnitOptionLabel(typeId, index);
-  if (!confirm(`Xóa ${unit} khỏi ${csht}?`)) return;
+  if (!confirm(`Chuyển ${unit} vào Kho?\nThiết bị và lịch sử được giữ lại, không xóa hẳn.`)) return;
+  const removed = devices[index];
   devices.splice(index, 1);
   const who = currentUserLabel();
   const cleanDevices = devices
-    .map((d) => {
-      const clean = {};
-      for (const f of typeDef.fields) {
-        if (d[f.key] != null && String(d[f.key]).trim() !== '') clean[f.key] = String(d[f.key]).trim();
-      }
-      if (d.lastEditedBy) clean.lastEditedBy = d.lastEditedBy;
-      if (d.lastEditedAt) clean.lastEditedAt = d.lastEditedAt;
-      return clean;
-    })
-    .filter((d) => Object.keys(d).some((k) => !k.startsWith('lastEdited')));
+    .map((d) => sanitizeEquipmentDevice(typeDef, ensureEquipmentDeviceId(d)))
+    .filter((d) => countEquipmentDataFields(d) || d.deviceId);
   const payload = equipmentPayload(cleanDevices, who, state.user.uid, 'manual');
+  try {
+    await moveDevicesToKho({
+      typeId,
+      items: [{ device: removed, index }],
+      site,
+      csht,
+      who,
+      uid: state.user.uid,
+      note: `Gỡ ${unit} khỏi ${formatMaTram(site.maTram) || csht}`,
+    });
+    await update(ref(db, `equipment/${csht}`), {
+      ...equipmentSiteMetaPatch(csht, site, who),
+      [typeId]: {
+        devices: Object.keys(payload.devices).length ? payload.devices : null,
+        lastEditedBy: who,
+        lastEditedByUid: state.user.uid,
+        lastEditedAt: serverTimestamp(),
+        source: 'manual',
+      },
+    });
+    toast(`Đã chuyển ${unit} vào Kho`);
+    render();
+  } catch (e) {
+    toast('Chuyển Kho thất bại: ' + (e.message || e));
+  }
+}
+
+async function restoreKhoDevice(khoId, targetCsht) {
+  const id = String(khoId || '').trim();
+  const csht = String(targetCsht || '').trim();
+  const row = state.equipmentKho?.[id];
+  if (!id || !row || row.status === 'restored') {
+    toast('Không tìm thấy thiết bị trong Kho');
+    return;
+  }
+  if (!csht) {
+    toast('Thiếu mã CSHT để khôi phục');
+    return;
+  }
+  const typeId = row.typeId;
+  const typeDef = equipmentTypeById(typeId);
+  if (!typeDef) {
+    toast('Loại thiết bị không hợp lệ');
+    return;
+  }
+  const who = currentUserLabel();
+  const site = equipmentSiteByCsht(csht) || { maCsht: csht };
+  let device = sanitizeEquipmentDevice(typeDef, ensureEquipmentDeviceId(row.device || {}));
+  device = appendEquipmentHistory(device, {
+    at: Date.now(),
+    by: who,
+    byUid: state.user.uid,
+    action: 'restored',
+    csht,
+    maTram: site.maTram || null,
+    note: `Khôi phục từ Kho → ${formatMaTram(site.maTram) || csht}`,
+  });
+  device.lastEditedBy = who;
+  device.lastEditedAt = Date.now();
+  const list = [...(equipmentDevicesByCsht(csht)[typeId] || [])].map((d) =>
+    sanitizeEquipmentDevice(typeDef, ensureEquipmentDeviceId(d))
+  );
+  const serialHit = findEquipmentSerialConflict(typeDef, [...list, device], equipmentSerialsElsewhere(typeId, csht));
+  if (serialHit) {
+    toast(equipmentSerialConflictMessage(typeDef, serialHit));
+    return;
+  }
+  list.push(device);
+  const payload = equipmentPayload(list, who, state.user.uid, 'manual');
   try {
     await update(ref(db, `equipment/${csht}`), {
       ...equipmentSiteMetaPatch(csht, site, who),
@@ -3208,10 +3438,21 @@ async function deleteEquipmentDeviceDirect(maCsht, typeId, index) {
         source: 'manual',
       },
     });
-    toast(`Đã xóa ${unit}`);
+    await update(ref(db, `equipmentKho/${id}`), {
+      status: 'restored',
+      restoredAt: serverTimestamp(),
+      restoredBy: who,
+      restoredByUid: state.user.uid,
+      restoredToCsht: csht,
+      device,
+      history: device.history || {},
+    });
+    toast(`Đã khôi phục ${typeDef.title} → ${formatMaTram(site.maTram) || csht}`);
+    state.equipmentKhoOpen = false;
+    state.equipmentExpanded = { ...state.equipmentExpanded, [csht]: true };
     render();
   } catch (e) {
-    toast('Xóa thất bại: ' + (e.message || e));
+    toast('Khôi phục thất bại: ' + (e.message || e));
   }
 }
 
@@ -3226,24 +3467,39 @@ async function saveEquipment() {
   }
   const who = currentUserLabel();
   const nowMs = Date.now();
-  const devices = (equipmentDraft.byType[typeId] || [])
-    .map((raw) => {
-      const d = typeId === 'binh_acquy' ? applyBinhAcquyInferredFields(raw) : raw;
-      const clean = {};
-      for (const f of typeDef.fields) {
-        if (d[f.key] != null && String(d[f.key]).trim() !== '') clean[f.key] = String(d[f.key]).trim();
-      }
-      if (!Object.keys(clean).length) return null;
-      clean.lastEditedBy = who;
-      clean.lastEditedAt = nowMs;
-      return clean;
-    })
-    .filter(Boolean);
   const csht = (equipmentDraft.maCsht || '').trim();
   if (!csht) {
     toast('Thiếu mã CSHT — không lưu được thiết bị');
     return;
   }
+  const site = equipmentSiteByCsht(csht) || {};
+  const prevList = equipmentDevicesByCsht(csht)[typeId] || [];
+  const prevByKey = new Map();
+  for (const d of prevList) {
+    const k = d?.deviceId ? `id:${d.deviceId}` : null;
+    if (k) prevByKey.set(k, d);
+  }
+  const devices = (equipmentDraft.byType[typeId] || [])
+    .map((raw) => {
+      let d = typeId === 'binh_acquy' ? applyBinhAcquyInferredFields(raw) : raw;
+      d = sanitizeEquipmentDevice(typeDef, ensureEquipmentDeviceId(d));
+      if (!countEquipmentDataFields(d)) return null;
+      const prev = d.deviceId ? prevByKey.get(`id:${d.deviceId}`) : null;
+      const isNew = !prev;
+      d = appendEquipmentHistory(d, {
+        at: nowMs,
+        by: who,
+        byUid: state.user.uid,
+        action: isNew ? 'created' : 'updated',
+        csht,
+        maTram: site.maTram || null,
+        note: isNew ? 'Thêm trên CSHT' : 'Cập nhật trên CSHT',
+      });
+      d.lastEditedBy = who;
+      d.lastEditedAt = nowMs;
+      return d;
+    })
+    .filter(Boolean);
   const serialHit = findEquipmentSerialConflict(
     typeDef,
     devices,
@@ -3253,22 +3509,29 @@ async function saveEquipment() {
     toast(equipmentSerialConflictMessage(typeDef, serialHit));
     return;
   }
-  // Lưu form trống sẽ làm Firebase bỏ `devices: {}` → mất MPD trên list.
-  if (!devices.length) {
-    const existingN = (equipmentDevicesByCsht(csht)[typeId] || []).length;
-    if (existingN) {
-      if (
-        !confirm(
-          `Đang lưu ${typeDef.title} trống — sẽ xóa ${existingN} thiết bị đã có trên CSHT này. Tiếp tục?`
-        )
-      ) {
-        return;
-      }
+  const removed = diffRemovedEquipmentDevices(prevList, devices);
+  if (removed.length) {
+    if (
+      !confirm(
+        `Có ${removed.length} ${typeDef.title} sẽ chuyển vào Kho (không xóa hẳn). Tiếp tục?`
+      )
+    ) {
+      return;
     }
   }
   const payload = equipmentPayload(devices, who, state.user.uid, 'manual');
   try {
-    const site = equipmentSiteByCsht(csht) || {};
+    if (removed.length) {
+      await moveDevicesToKho({
+        typeId,
+        items: removed,
+        site,
+        csht,
+        who,
+        uid: state.user.uid,
+        note: 'Gỡ khi lưu form thiết bị',
+      });
+    }
     await update(ref(db, `equipment/${csht}`), {
       ...equipmentSiteMetaPatch(csht, site, who),
       [typeId]: {
@@ -3279,7 +3542,6 @@ async function saveEquipment() {
         source: payload.source,
       },
     });
-    // Cập nhật danh mục loại TB toàn hệ thống (hãng+model → thông số cố định)
     upsertEquipmentKindsFromDevices(typeId, devices, who).catch(() => {});
     const mode = equipmentDraft.mode;
     const sheet = $('#detail-sheet');
@@ -3288,9 +3550,11 @@ async function saveEquipment() {
     toast(
       devices.length
         ? mode === 'edit'
-          ? `Đã cập nhật ${typeDef.title}`
-          : `Đã lưu ${devices.length} ${typeDef.title}`
-        : `Đã xóa dữ liệu ${typeDef.title}`
+          ? `Đã cập nhật ${typeDef.title}${removed.length ? ` · ${removed.length} vào Kho` : ''}`
+          : `Đã lưu ${devices.length} ${typeDef.title}${removed.length ? ` · ${removed.length} vào Kho` : ''}`
+        : removed.length
+          ? `Đã chuyển ${removed.length} ${typeDef.title} vào Kho`
+          : `Đã lưu ${typeDef.title}`
     );
     state.selectedCsht = null;
     state.sheetMode = null;
@@ -3348,9 +3612,34 @@ function bindEvents() {
     renderEquipmentList();
   });
   $('#equipment-find-btn')?.addEventListener('click', () => {
+    state.equipmentKhoOpen = false;
     state.equipmentFindOpen = !state.equipmentFindOpen;
-    renderEquipmentFind();
+    render();
     if (state.equipmentFindOpen) $('#equipment-find-input')?.focus();
+  });
+  $('#equipment-kho-btn')?.addEventListener('click', () => {
+    state.equipmentKhoOpen = !state.equipmentKhoOpen;
+    if (state.equipmentKhoOpen) state.equipmentFindOpen = false;
+    render();
+    if (state.equipmentKhoOpen) $('#equipment-kho-search')?.focus();
+  });
+  $('#equipment-kho-search')?.addEventListener('input', (e) => {
+    state.equipmentKhoQuery = e.target.value;
+    renderEquipmentKho();
+  });
+  $('#equipment-kho-list')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action="kho-restore"][data-kho-id]');
+    if (!btn) return;
+    const card = btn.closest('[data-kho-id]');
+    const cshtInput = card?.querySelector('.kho-restore-csht');
+    const csht = String(cshtInput?.value || '').trim();
+    if (!csht) {
+      toast('Nhập mã CSHT để khôi phục');
+      cshtInput?.focus();
+      return;
+    }
+    if (!confirm(`Khôi phục thiết bị về ${csht}?`)) return;
+    restoreKhoDevice(btn.dataset.khoId, csht);
   });
   $('#equipment-find-input')?.addEventListener('input', (e) => {
     state.equipmentFindQuery = e.target.value;
@@ -3654,6 +3943,11 @@ function bindStationsListener() {
     if (!state.user) return;
     state.equipmentByCsht = snap.val() || {};
     render();
+  });
+  onValue(ref(db, 'equipmentKho'), (snap) => {
+    if (!state.user) return;
+    state.equipmentKho = snap.val() || {};
+    if (state.tab === 'equipment') render();
   });
   onValue(
     ref(db, 'equipmentKinds'),
